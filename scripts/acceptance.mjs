@@ -101,15 +101,44 @@ for (const hex of SKINTONE_HEXES) {
   else console.log(`  PASS ${hex}  ${rel.length} file(s), all question-3 swatch module: ${rel.join(', ')}`);
 }
 
-/* ── 3. API KEY IN CLIENT BUNDLE ────────────────────────── */
-console.log('\n=== 3. ANTHROPIC_API_KEY in client bundle ===');
+/* ── 3. SECRETS IN CLIENT BUNDLE ────────────────────────── */
+/* Every server-only secret, by name and — where it has a recognisable shape —
+ * by value. A NEXT_PUBLIC_ prefix or an accidental import of a server module
+ * into a client component is exactly what this catches. */
+console.log('\n=== 3. Secrets in client bundle ===');
+const SECRET_NAMES = [
+  'ANTHROPIC_API_KEY',
+  'LEMONSQUEEZY_API_KEY',
+  'LEMONSQUEEZY_WEBHOOK_SECRET',
+  'ROZU_TOKEN_SECRET',
+  'KV_REST_API_TOKEN',
+  'UPSTASH_REDIS_REST_TOKEN',
+];
+const SECRET_SHAPES = [/sk-ant-[A-Za-z0-9_-]{8,}/, /eyJ[A-Za-z0-9_-]{20,}\./];
 const clientFiles = walk(join(ROOT, '.next/static'));
-const keyHits = clientFiles.filter((f) => {
-  const t = readFileSync(f, 'utf8');
-  return t.includes('ANTHROPIC_API_KEY') || /sk-ant-[A-Za-z0-9_-]{8,}/.test(t);
-});
-if (keyHits.length) { fail = 1; keyHits.forEach((f) => console.log('  FAIL ' + relative(ROOT, f))); }
-else console.log(`  PASS — no ANTHROPIC_API_KEY and no sk-ant-* literal across ${clientFiles.length} client files`);
+let leaked = 0;
+for (const name of SECRET_NAMES) {
+  const hits = clientFiles.filter((f) => readFileSync(f, 'utf8').includes(name)).map((f) => relative(ROOT, f));
+  if (hits.length) { fail = 1; leaked = 1; console.log(`  FAIL ${name} — ${hits.join(', ')}`); }
+}
+for (const shape of SECRET_SHAPES) {
+  const hits = clientFiles.filter((f) => shape.test(readFileSync(f, 'utf8'))).map((f) => relative(ROOT, f));
+  if (hits.length) { fail = 1; leaked = 1; console.log(`  FAIL literal matching ${shape} — ${hits.join(', ')}`); }
+}
+if (!leaked) {
+  console.log(`  PASS — none of ${SECRET_NAMES.length} secret names, and no key-shaped literal, across ${clientFiles.length} client files`);
+}
+
+/* ── 4. NODE-ONLY MODULES IN CLIENT BUNDLE ──────────────── */
+/* node:crypto reaching the browser would mean a server module (paidToken,
+ * lemonsqueezy, kv) got pulled into a client component. Next would usually
+ * fail the build first, but this is the cheap direct check. */
+console.log('\n=== 4. Server-only modules in client bundle ===');
+const nodeHits = clientFiles
+  .filter((f) => /require\(["']node:(crypto|fs|http)["']\)|from"node:(crypto|fs|http)"/.test(readFileSync(f, 'utf8')))
+  .map((f) => relative(ROOT, f));
+if (nodeHits.length) { fail = 1; nodeHits.forEach((h) => console.log('  FAIL ' + h)); }
+else console.log(`  PASS — no node: builtin imports across ${clientFiles.length} client files`);
 
 console.log('\n' + (fail ? 'RESULT: FAIL' : 'RESULT: PASS'));
 process.exit(fail);

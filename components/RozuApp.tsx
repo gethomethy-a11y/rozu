@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { fallback } from '@/lib/fallback';
 import {
   QS,
   emptyLife,
@@ -28,8 +27,63 @@ import { Toast } from './Toast';
 type Screen = 'landing' | 'ptScreen' | 'quiz' | 'loading' | 'result';
 /** Which of the two `#rBody` states the result screen is showing. */
 type ResultPhase = 'preview' | 'building' | 'full';
+/** Mirrors lib/paidToken's Plan. Not imported: that module pulls in node:crypto. */
+type Plan = 'solo' | 'couple';
 
 const AI_MSGS = ['Analysing your heritage', 'Mapping your skin biology', 'Personalising your protocol', 'Almost ready…'];
+
+/* Surviving the payment round trip.
+   The customer leaves the site entirely for Lemon Squeezy's checkout — a full
+   navigation, not an overlay, because in-app browsers (TikTok, LinkedIn) are
+   the primary traffic and they handle a redirect far more reliably than a
+   third-party overlay script.
+     DRAFT_KEY  — per tab. Restores the preview if they back out of checkout.
+     SID_KEY    — per browser. Recovers a purchase whose tab was closed. */
+const DRAFT_KEY = 'rozu_draft';
+const SID_KEY = 'rozu_sid';
+const DRAFT_TTL_MS = 60 * 60 * 1000;
+const SID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'ttclid', 'li_fat_id'];
+
+/** How long to wait for the payment webhook after the browser comes back. */
+const PAID_POLL_MS = 1500;
+const PAID_DEADLINE_MS = 120000;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+type Draft = {
+  t: number;
+  mode: Mode | null;
+  bothDone: boolean;
+  selfAns: Answers;
+  selfLife: Life;
+  partAns: Answers;
+  partLife: Life;
+};
+
+/** Storage is unavailable in some in-app browsers and in private mode; every
+ *  call site treats it as a nicety, never a requirement. */
+function safeGet(store: 'session' | 'local', key: string): string | null {
+  try {
+    return (store === 'session' ? window.sessionStorage : window.localStorage).getItem(key);
+  } catch {
+    return null;
+  }
+}
+function safeSet(store: 'session' | 'local', key: string, value: string): void {
+  try {
+    (store === 'session' ? window.sessionStorage : window.localStorage).setItem(key, value);
+  } catch {
+    /* ignore */
+  }
+}
+function safeDel(store: 'session' | 'local', key: string): void {
+  try {
+    (store === 'session' ? window.sessionStorage : window.localStorage).removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
 
 export function RozuApp() {
   const [screen, setScreen] = useState<Screen>('landing');
@@ -175,74 +229,231 @@ export function RozuApp() {
     }
   }, [cQ, show]);
 
-  /* ── AI + RESULT ─────────────────────────────────────── */
+  /* ── PAYMENT ─────────────────────────────────────────── */
 
-  /* Was an unauthenticated browser call straight to api.anthropic.com, which
-     could only ever work inside the artifact sandbox. Now POSTs to our own
-     route, which holds the key server-side. The 12s client timeout and every
-     failure path are kept: /api/generate already falls back internally, so a
-     null here only happens if the route itself is unreachable — and the caller
-     falls back again. The user never sees an error screen. */
-  const tryAPI = useCallback((heritage: string, skin: string, life: Life): Promise<Routine | null> => {
-    return new Promise((resolve) => {
-      let settled = false;
-      const done = (v: Routine | null) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        controller.abort();
-        resolve(v);
-      };
-      const controller = new AbortController();
-      const timer = setTimeout(() => done(null), 12000);
+  /* The prototype's "Unlock" button called the model directly and for free.
+     Now it buys first: create an order server-side, hand the customer to Lemon
+     Squeezy, and only generate once the webhook confirms the money arrived.
+     Nothing on this path can reach the model without a verified payment. */
 
-      fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({ heritage, skin, life }),
-      })
-        .then((r) => {
-          if (!r.ok) throw new Error('bad status');
-          return r.json();
-        })
-        .then((d) => done(d && d.routine ? (d.routine as Routine) : null))
-        .catch(() => done(null));
-    });
-  }, []);
+  const busy = useRef(false);
+
+  /** Whether the running flow came back from a real redirect (worth telling the
+   *  customer when it fails) or is a silent background recovery attempt. */
+  const resumeLoud = useRef(true);
 
   const doPurchase = useCallback(async () => {
+    if (busy.current) return;
+    busy.current = true;
+
+    const plan: Plan = mode === 'couple' && bothDone ? 'couple' : 'solo';
+    const utm: Record<string, string> = {};
+    const q = new URLSearchParams(window.location.search);
+    for (const k of UTM_KEYS) {
+      const v = q.get(k);
+      if (v) utm[k] = v;
+    }
+
+    /* Written before we navigate away: if the customer abandons the checkout
+       and presses back, this is what puts them on the preview instead of the
+       landing page with an empty quiz. */
+    const draft: Draft = { t: Date.now(), mode, bothDone, selfAns, selfLife, partAns, partLife };
+    safeSet('session', DRAFT_KEY, JSON.stringify(draft));
+
+    setAiMsg('Opening secure checkout…');
     setResultPhase('building');
-    setAiMsg(AI_MSGS[0]);
-    let mi = 0;
-    const iv = setInterval(() => {
-      mi++;
-      setAiMsg(AI_MSGS[mi % AI_MSGS.length]);
-    }, 900);
 
-    const h = heritageOf(selfAns);
-    const s = skinOf(selfAns);
-    const isCouple = mode === 'couple' && bothDone;
-    const ph = isCouple ? heritageOf(partAns) : '';
-    const ps = isCouple ? skinOf(partAns) : '';
+    try {
+      const r = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan,
+          self: { heritage: heritageOf(selfAns), skin: skinOf(selfAns), life: selfLife },
+          partner: plan === 'couple' ? { heritage: heritageOf(partAns), skin: skinOf(partAns), life: partLife } : null,
+          utm,
+        }),
+      });
+      if (!r.ok) throw new Error(`checkout ${r.status}`);
+      const d = (await r.json()) as { url?: string; sid?: string };
+      if (!d.url || !d.sid) throw new Error('checkout returned nothing');
 
-    /* The prototype ran these sequentially, so a couple could wait through two
-       12s timeouts back to back. Running them together halves the worst case;
-       nothing visual changes. */
-    const [pRes, ppRes] = await Promise.all([
-      tryAPI(h, s, selfLife),
-      isCouple ? tryAPI(ph, ps, partLife) : Promise.resolve(null),
-    ]);
+      // Last thing before leaving: the recovery handle for a closed tab.
+      safeSet('local', SID_KEY, d.sid);
+      window.location.href = d.url;
+    } catch (e) {
+      console.warn('[checkout]', e);
+      busy.current = false;
+      setResultPhase('preview');
+      toast('Could not open checkout. Please try again.', false);
+    }
+  }, [mode, bothDone, selfAns, selfLife, partAns, partLife, toast]);
 
-    const p = pRes ?? fallback(h, s, selfLife);
-    const pp = isCouple ? (ppRes ?? fallback(ph, ps, partLife)) : null;
+  /** Waits for the webhook, then fetches the paid-for routine. */
+  const resume = useCallback(
+    async (sid: string, loud: boolean) => {
+      if (busy.current) return;
+      busy.current = true;
+      resumeLoud.current = loud;
 
-    clearInterval(iv);
-    setRoutine({ p, h, s, pp, ph, ps });
-    setResultPhase('full');
-  }, [selfAns, selfLife, mode, bothDone, partAns, partLife, tryAPI]);
+      if (loud) {
+        setAiMsg('Confirming your payment…');
+        setResultPhase('building');
+        show('result');
+      }
+
+      /* The webhook and the redirect race each other. Usually the webhook wins
+         and the first poll succeeds; if the customer is fast, or Lemon Squeezy
+         is slow, this waits it out rather than telling them the payment failed. */
+      const deadline = Date.now() + PAID_DEADLINE_MS;
+      let paid: { token: string; plan: Plan } | null = null;
+      let refunded = false;
+
+      for (;;) {
+        try {
+          const r = await fetch(`/api/paid?sid=${encodeURIComponent(sid)}`, { cache: 'no-store' });
+          if (r.status === 404) break; // sid we never issued, or long expired
+          if (r.ok) {
+            const d = (await r.json()) as { status?: string; token?: string; plan?: Plan };
+            if (d.status === 'paid' && d.token && d.plan) {
+              paid = { token: d.token, plan: d.plan };
+              break;
+            }
+            if (d.status === 'refunded') {
+              refunded = true;
+              break;
+            }
+          }
+        } catch {
+          /* offline or a blip — keep waiting */
+        }
+        if (Date.now() > deadline) break;
+        await sleep(PAID_POLL_MS);
+      }
+
+      if (!paid) {
+        // Nothing was bought under this sid, so it is not a recovery handle.
+        safeDel('local', SID_KEY);
+        busy.current = false;
+        if (!loud) return;
+        setResultPhase('preview');
+        toast(
+          refunded ? 'This order was refunded.' : 'We could not confirm your payment. Please contact support.',
+          false,
+        );
+        return;
+      }
+
+      safeDel('local', SID_KEY);
+      safeDel('session', DRAFT_KEY);
+
+      if (!loud) {
+        setAiMsg(AI_MSGS[0]);
+        setResultPhase('building');
+        show('result');
+      } else {
+        setAiMsg(AI_MSGS[0]);
+      }
+
+      let mi = 0;
+      const iv = setInterval(() => {
+        mi++;
+        setAiMsg(AI_MSGS[mi % AI_MSGS.length]);
+      }, 900);
+
+      try {
+        const r = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sid, token: paid.token }),
+        });
+        if (!r.ok) throw new Error(`generate ${r.status}`);
+        const d = (await r.json()) as {
+          self: Routine;
+          partner: Routine | null;
+          plan: Plan;
+          profile: { self: { heritage: string; skin: string }; partner: { heritage: string; skin: string } | null };
+        };
+
+        /* After a redirect the quiz state is gone, so the labels the result
+           screen prints come back with the routine rather than from `ans`. */
+        setMode(d.plan === 'couple' ? 'couple' : 'solo');
+        setBothDone(d.plan === 'couple');
+        setRoutine({
+          p: d.self,
+          h: d.profile.self.heritage,
+          s: d.profile.self.skin,
+          pp: d.partner,
+          ph: d.profile.partner?.heritage ?? '',
+          ps: d.profile.partner?.skin ?? '',
+        });
+        setResultPhase('full');
+      } catch (e) {
+        /* The customer has paid and the routine is cached server-side, so this
+           is recoverable by reloading — never a dead end. */
+        console.warn('[generate]', e);
+        toast('Your routine is ready but did not load. Please refresh.', false);
+      } finally {
+        clearInterval(iv);
+        busy.current = false;
+      }
+    },
+    [show, toast],
+  );
+
+  /* On load, work out which of three arrivals this is:
+       ?sid= in the URL   — just came back from checkout, wait for the webhook
+       a stored sid       — a purchase whose tab was closed; check it silently
+       a stored draft     — backed out of checkout; put the preview back
+     Runs once. */
+  const arrived = useRef(false);
+  useEffect(() => {
+    if (arrived.current) return;
+    arrived.current = true;
+
+    const fromUrl = new URLSearchParams(window.location.search).get('sid');
+    if (fromUrl && SID_RE.test(fromUrl)) {
+      void resume(fromUrl, true);
+      return;
+    }
+
+    const stored = safeGet('local', SID_KEY);
+    if (stored && SID_RE.test(stored)) {
+      void resume(stored, false);
+      return;
+    }
+
+    const rawDraft = safeGet('session', DRAFT_KEY);
+    if (!rawDraft) return;
+    try {
+      const d = JSON.parse(rawDraft) as Draft;
+      if (!d || typeof d.t !== 'number' || Date.now() - d.t > DRAFT_TTL_MS) {
+        safeDel('session', DRAFT_KEY);
+        return;
+      }
+      setMode(d.mode);
+      setBothDone(d.bothDone);
+      setSelfAns(d.selfAns);
+      setSelfLife(d.selfLife);
+      setPartAns(d.partAns);
+      setPartLife(d.partLife);
+      setResultPhase('preview');
+      show('result');
+    } catch {
+      safeDel('session', DRAFT_KEY);
+    }
+  }, [resume, show]);
+
+  /* ── RESULT ──────────────────────────────────────────── */
 
   const restart = useCallback(() => {
+    safeDel('session', DRAFT_KEY);
+    safeDel('local', SID_KEY);
+    busy.current = false;
+    // Drop ?sid= so a reload does not pull the finished order back up.
+    if (window.location.search) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
     setMode(null);
     setCQ(0);
     setFilling('self');

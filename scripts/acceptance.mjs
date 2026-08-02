@@ -47,11 +47,25 @@ const files = TARGETS.flatMap((t) => walk(join(ROOT, t)));
 let fail = 0;
 
 /* ── 1. EMOJI ───────────────────────────────────────────── */
-// Framework-vendored files. Emoji here are Next.js/core-js internals (a
-// core-js license "©", Next's server-side terminal logger "⚠"/"▲"/"⨯"), not
-// RŌZU product code, and none of them render in the product UI. Reported
-// separately so the gate stays a real regression check on our own code.
-const VENDORED = /(^|\/)\.next\/(static\/chunks\/(polyfills|framework|webpack|main|4bd1b696)|server\/chunks\/)/;
+/* Classify a built file as RŌZU product code or framework plumbing.
+ *
+ * Rule, rather than an ever-growing exclusion list:
+ *   - .next/static/**  ships to the browser, so it must be clean — except the
+ *     handful of files that are verbatim vendor payloads (core-js polyfills,
+ *     the React vendor chunk, Next's own runtime).
+ *   - .next/server/**  only app/** is ours. Everything else there is Next's
+ *     generated infrastructure (e.g. pages/_error.js, which exists even though
+ *     this project has no pages/ directory) and never renders in the product.
+ *
+ * Known vendored emoji: a "©" in core-js's license string, and Next's
+ * server-side terminal logger "⚠"/"▲"/"⨯".
+ */
+const VENDOR_STATIC = /\.next\/static\/chunks\/(polyfills|framework|webpack|main|4bd1b696)/;
+function isVendored(rel) {
+  if (rel.startsWith('.next/static/')) return VENDOR_STATIC.test(rel);
+  if (rel.startsWith('.next/server/')) return !rel.startsWith('.next/server/app/');
+  return false;
+}
 
 console.log('=== 1. Emoji in shipped bundle ===');
 const ours = [];
@@ -63,7 +77,7 @@ for (const f of files) {
     .map((c) => c + ' U+' + c.codePointAt(0).toString(16).toUpperCase().padStart(4, '0'))
     .join(' ');
   const line = `${relative(ROOT, f)}: ${found}`;
-  (VENDORED.test(relative(ROOT, f)) ? vendor : ours).push(line);
+  (isVendored(relative(ROOT, f)) ? vendor : ours).push(line);
 }
 if (ours.length) { fail = 1; ours.forEach((h) => console.log('  FAIL (product code) ' + h)); }
 else console.log(`  PASS — 0 emoji in RŌZU product code across ${files.length} built files (escapes decoded)`);

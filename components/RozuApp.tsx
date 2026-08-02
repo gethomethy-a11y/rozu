@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { fallback } from '@/lib/fallback';
-import { buildPrompt } from '@/lib/prompt';
 import {
   QS,
   emptyLife,
@@ -178,55 +177,36 @@ export function RozuApp() {
 
   /* ── AI + RESULT ─────────────────────────────────────── */
 
-  /* Ported from tryAPI(). The browser call is unauthenticated and therefore
-     always fails outside the artifact sandbox — step 2 replaces this with
-     POST /api/generate. Every failure path resolves null so the caller falls
-     back; the user never sees an error screen. */
-  const tryAPI = useCallback((prompt: string): Promise<Routine | null> => {
+  /* Was an unauthenticated browser call straight to api.anthropic.com, which
+     could only ever work inside the artifact sandbox. Now POSTs to our own
+     route, which holds the key server-side. The 12s client timeout and every
+     failure path are kept: /api/generate already falls back internally, so a
+     null here only happens if the route itself is unreachable — and the caller
+     falls back again. The user never sees an error screen. */
+  const tryAPI = useCallback((heritage: string, skin: string, life: Life): Promise<Routine | null> => {
     return new Promise((resolve) => {
       let settled = false;
       const done = (v: Routine | null) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        controller.abort();
         resolve(v);
       };
+      const controller = new AbortController();
       const timer = setTimeout(() => done(null), 12000);
 
-      fetch('https://api.anthropic.com/v1/messages', {
+      fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 1000,
-          messages: [{ role: 'user', content: prompt }],
-        }),
+        signal: controller.signal,
+        body: JSON.stringify({ heritage, skin, life }),
       })
         .then((r) => {
           if (!r.ok) throw new Error('bad status');
           return r.json();
         })
-        .then((d) => {
-          let txt = '';
-          if (d && d.content) {
-            for (let i = 0; i < d.content.length; i++) {
-              if (d.content[i].type === 'text') {
-                txt = d.content[i].text;
-                break;
-              }
-            }
-          }
-          const clean = txt.replace(/```json/g, '').replace(/```/g, '').trim();
-          if (clean.charAt(0) === '{') {
-            try {
-              done(JSON.parse(clean));
-              return;
-            } catch (e) {
-              /* fall through */
-            }
-          }
-          done(null);
-        })
+        .then((d) => done(d && d.routine ? (d.routine as Routine) : null))
         .catch(() => done(null));
     });
   }, []);
@@ -242,18 +222,20 @@ export function RozuApp() {
 
     const h = heritageOf(selfAns);
     const s = skinOf(selfAns);
-    let p = await tryAPI(buildPrompt(h, s, selfLife));
-    if (!p) p = fallback(h, s, selfLife);
+    const isCouple = mode === 'couple' && bothDone;
+    const ph = isCouple ? heritageOf(partAns) : '';
+    const ps = isCouple ? skinOf(partAns) : '';
 
-    let pp: Routine | null = null;
-    let ph = '';
-    let ps = '';
-    if (mode === 'couple' && bothDone) {
-      ph = heritageOf(partAns);
-      ps = skinOf(partAns);
-      pp = await tryAPI(buildPrompt(ph, ps, partLife));
-      if (!pp) pp = fallback(ph, ps, partLife);
-    }
+    /* The prototype ran these sequentially, so a couple could wait through two
+       12s timeouts back to back. Running them together halves the worst case;
+       nothing visual changes. */
+    const [pRes, ppRes] = await Promise.all([
+      tryAPI(h, s, selfLife),
+      isCouple ? tryAPI(ph, ps, partLife) : Promise.resolve(null),
+    ]);
+
+    const p = pRes ?? fallback(h, s, selfLife);
+    const pp = isCouple ? (ppRes ?? fallback(ph, ps, partLife)) : null;
 
     clearInterval(iv);
     setRoutine({ p, h, s, pp, ph, ps });

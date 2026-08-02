@@ -39,9 +39,11 @@ function check(name, ok, detail = '') {
      /v1/checkouts — Lemon Squeezy. Records what it was asked to create, so the
                      test can read back the sid exactly as the real service
                      would hand it to the customer.
-     /kv           — an Upstash-compatible Redis REST endpoint, so the test
-                     exercises the real KV code path (SET .. EX .. NX, GET, DEL)
-                     rather than the dev-only in-process fallback. */
+     /kv           — an Upstash-compatible Redis REST endpoint
+     /rest/v1/...  — a PostgREST-compatible endpoint standing in for Supabase
+
+   The suite runs twice, once against each storage backing, so both drivers are
+   exercised by the same assertions rather than one being taken on trust. */
 const checkouts = [];
 const store = new Map();
 
@@ -76,10 +78,57 @@ function redis(args) {
   }
 }
 
+/* PostgREST stand-in for Supabase, over the same `store` Map.
+   Rows are { value, expires_at }; expiry is a column, as in real Postgres. */
+function postgrest(method, url, body, prefer) {
+  const q = new URL(url, 'http://x');
+  const eq = (q.searchParams.get('key') ?? '').replace(/^eq\./, '');
+  const key = decodeURIComponent(eq);
+  const gt = (q.searchParams.get('expires_at') ?? '').replace(/^(gt|lt)\./, '');
+  const op = (q.searchParams.get('expires_at') ?? '').startsWith('lt.') ? 'lt' : 'gt';
+  const row = store.get(key);
+
+  if (method === 'GET') {
+    if (!row) return [];
+    if (gt && !(new Date(row.expires_at) > new Date(decodeURIComponent(gt)))) return [];
+    return [{ value: row.value }];
+  }
+
+  if (method === 'POST') {
+    const r = JSON.parse(body);
+    const exists = store.has(r.key);
+    if (prefer.includes('ignore-duplicates') && exists) return [];
+    store.set(r.key, { value: r.value, expires_at: r.expires_at });
+    return prefer.includes('return=representation') ? [r] : null;
+  }
+
+  if (method === 'DELETE') {
+    if (!row) return null;
+    // A conditional delete (expires_at=lt.now) must not remove a live row.
+    if (gt && op === 'lt' && !(new Date(row.expires_at) < new Date(decodeURIComponent(gt)))) return null;
+    store.delete(key);
+    return null;
+  }
+
+  throw new Error(`postgrest: unsupported ${method}`);
+}
+
 const mock = createServer((req, res) => {
   let body = '';
   req.on('data', (c) => (body += c));
   req.on('end', () => {
+    if (req.url.startsWith('/rest/v1/')) {
+      try {
+        const out = postgrest(req.method, req.url, body, req.headers.prefer ?? '');
+        res.writeHead(out === null ? 204 : 200, { 'Content-Type': 'application/json' });
+        res.end(out === null ? '' : JSON.stringify(out));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: String(e.message) }));
+      }
+      return;
+    }
+
     if (req.url.startsWith('/kv')) {
       try {
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -251,10 +300,10 @@ console.log('\n=== 4. Couple purchase, browser returns before the webhook ===');
   check('the next poll succeeds', paid.status === 'paid' && Boolean(paid.token));
 
   const gen = await (await generate(sid, paid.token)).json();
-  check('two routines came back', Boolean(gen.self?.morning) && Boolean(gen.partner?.morning));
+  check('two routines came back', Boolean(gen.self?.morning) && Boolean(gen.partner?.morning), JSON.stringify(gen).slice(0, 200));
   check(
     'each partner got their own heritage',
-    gen.profile.self.heritage === 'Southeast Asian' && gen.profile.partner.heritage === 'Black / African',
+    gen.profile?.self?.heritage === 'Southeast Asian' && gen.profile?.partner?.heritage === 'Black / African',
   );
   check(
     'the two routines are actually different',

@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "acceptance": "node scripts/acceptance.mjs",
+    "test:payment": "STORAGE=upstash bash scripts/run-payment-test.sh && STORAGE=supabase bash scripts/run-payment-test.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

@@ -19,27 +19,64 @@ export LEMONSQUEEZY_VARIANT_SOLO="20001"
 export LEMONSQUEEZY_VARIANT_COUPLE="20002"
 export LEMONSQUEEZY_WEBHOOK_SECRET="test-webhook-secret-$(openssl rand -hex 8)"
 export ROZU_TOKEN_SECRET="test-token-secret-$(openssl rand -hex 16)"
-export KV_REST_API_URL="http://127.0.0.1:${MOCK_PORT}/kv"
-export KV_REST_API_TOKEN="test-kv-token"
+# Which storage driver to exercise. Both are run by `npm run test:payment`.
+STORAGE="${STORAGE:-upstash}"
+if [[ "$STORAGE" == "supabase" ]]; then
+  export SUPABASE_URL="http://127.0.0.1:${MOCK_PORT}"
+  export SUPABASE_SERVICE_ROLE_KEY="test-service-role-key"
+else
+  export KV_REST_API_URL="http://127.0.0.1:${MOCK_PORT}/kv"
+  export KV_REST_API_TOKEN="test-kv-token"
+fi
+echo "### storage backing: $STORAGE"
 # Deliberately unset: a paid order must still be delivered (as the
 # deterministic fallback) when the model is unreachable.
 unset ANTHROPIC_API_KEY || true
 
-cleanup() { [[ -n "${APP_PID:-}" ]] && kill "$APP_PID" 2>/dev/null || true; }
+cleanup() {
+  if [[ -n "${APP_PID:-}" ]]; then
+    # next start forks a worker into the same process group; killing only the
+    # parent leaves that worker holding the port.
+    kill -TERM -- "-$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true
+    # next start forks a worker; wait for the port to actually be released so a
+    # back-to-back second run does not collide with it.
+    for _ in $(seq 1 20); do
+      curl -fsS "$APP_URL" -o /dev/null 2>/dev/null || break
+      sleep 0.5
+    done
+  fi
+}
 trap cleanup EXIT
 
-npx next start -p "$APP_PORT" >/tmp/rozu-paytest-server.log 2>&1 &
+# A server left over from a previous run would answer on this port with the
+# previous run's secrets, and every webhook assertion would fail for a reason
+# that has nothing to do with the code under test. Refuse to start instead.
+if curl -fsS "$APP_URL" -o /dev/null 2>/dev/null; then
+  echo "ERROR: something is already listening on $APP_URL — stop it first" >&2
+  exit 1
+fi
+
+LOG="${LOG:-$(mktemp -p "${TMPDIR:-/tmp}" rozu-paytest-XXXXXX)}"
+setsid npx next start -p "$APP_PORT" >"$LOG" 2>&1 &
 APP_PID=$!
 
+READY=0
 for _ in $(seq 1 60); do
-  if curl -fsS "$APP_URL" -o /dev/null 2>/dev/null; then break; fi
+  if curl -fsS "$APP_URL" -o /dev/null 2>/dev/null; then READY=1; break; fi
+  # Fail fast if the server died rather than waiting out the full timeout.
+  if ! kill -0 "$APP_PID" 2>/dev/null; then break; fi
   sleep 0.5
 done
+if [[ "$READY" != "1" ]]; then
+  echo "ERROR: server did not come up. Log:" >&2
+  cat "$LOG" >&2
+  exit 1
+fi
 
-node scripts/payment-test.mjs
-STATUS=$?
+STATUS=0
+node scripts/payment-test.mjs || STATUS=$?
 
 echo
-echo "--- server log ---"
-cat /tmp/rozu-paytest-server.log
+echo "--- server log ($STORAGE) ---"
+cat "$LOG"
 exit $STATUS

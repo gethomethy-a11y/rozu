@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { kvConfigured, kvDel, kvGet, kvSet } from '@/lib/kv';
+import { kvBacking, kvConfigured, kvDel, kvGet, kvSet } from '@/lib/kv';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,7 +29,7 @@ const REQUIRED = [
 /* Names that are nearly right. A variable Vercel holds under the wrong name is
    invisible to the code and produces no error anywhere — worth calling out by
    name rather than just reporting the real one as missing. */
-const LOOKALIKE = /^(lemon|rozu|anthropic|upstash|kv_)/i;
+const LOOKALIKE = /^(lemon|rozu|anthropic|upstash|kv_|supabase)/i;
 
 function lsHeaders(key: string) {
   return { Accept: 'application/vnd.api+json', Authorization: `Bearer ${key}` };
@@ -86,6 +86,9 @@ export async function GET() {
     'KV_REST_API_TOKEN',
     'UPSTASH_REDIS_REST_URL',
     'UPSTASH_REDIS_REST_TOKEN',
+    'SUPABASE_URL',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'SUPABASE_ANON_KEY',
     'LEMONSQUEEZY_API_BASE',
     'ANTHROPIC_BASE_URL',
     'ANTHROPIC_AUTH_TOKEN',
@@ -100,22 +103,36 @@ export async function GET() {
 
   /* ── Storage ───────────────────────────────────────────── */
   say();
-  say('2. STORAGE (Upstash Redis)');
+  say('2. STORAGE');
   say();
   if (!kvConfigured()) {
-    say('   MISSING  no Redis connected.');
-    say('            Vercel -> Storage -> Upstash Redis -> Create, then connect');
-    say('            it to this project. It sets its own variables.');
-    say('            Without it, checkout refuses to take money.');
+    say('   MISSING  no database connected. Checkout refuses to take money');
+    say('            without one. Pick either:');
+    say();
+    say('            SUPABASE — set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY,');
+    say('              then run the SQL at the bottom of this page once.');
+    say();
+    say('            UPSTASH  — Vercel -> Storage -> Upstash Redis -> Create.');
+    say('              Sets its own variables, no SQL.');
   } else {
     const probe = `setup-probe:${Date.now()}`;
     try {
       await kvSet(probe, { ok: true }, 60);
       const back = await kvGet<{ ok: boolean }>(probe);
       await kvDel(probe);
-      say(back?.ok ? '   OK       connected, and a write/read round trip worked' : '   BROKEN   connected but the value did not come back');
+      say(
+        back?.ok
+          ? `   OK       using ${kvBacking()}, and a write/read round trip worked`
+          : `   BROKEN   using ${kvBacking()}, but the value did not come back`,
+      );
     } catch (e) {
-      say(`   BROKEN   ${e instanceof Error ? e.message : 'write failed'}`);
+      const msg = e instanceof Error ? e.message : 'write failed';
+      say(`   BROKEN   using ${kvBacking()}: ${msg}`);
+      if (/does not exist|PGRST205|42P01/i.test(msg)) {
+        say();
+        say('            The table is missing. Run the SQL at the bottom of this');
+        say('            page in Supabase -> SQL Editor, then reload this page.');
+      }
     }
   }
 
@@ -184,6 +201,26 @@ export async function GET() {
   say();
   say('   When everything above says OK, DELETE the ROZU_SETUP variable in');
   say('   Vercel. This page turns itself off without it.');
+
+  if (kvBacking() !== 'upstash') {
+    say();
+    say('5. SUPABASE TABLE (only if you chose Supabase)');
+    say();
+    say('   Supabase -> SQL Editor -> New query -> paste this -> Run:');
+    say();
+    say('   create table if not exists rozu_kv (');
+    say('     key        text primary key,');
+    say('     value      jsonb not null,');
+    say('     expires_at timestamptz not null');
+    say('   );');
+    say('   create index if not exists rozu_kv_expires_idx');
+    say('     on rozu_kv (expires_at);');
+    say('   alter table rozu_kv enable row level security;');
+    say();
+    say('   The last line matters: with row level security on and no policies,');
+    say('   the public anon key cannot read this table at all. Only the');
+    say('   service role key can, and that one never leaves the server.');
+  }
   say();
 
   return new NextResponse(out.join('\n'), {

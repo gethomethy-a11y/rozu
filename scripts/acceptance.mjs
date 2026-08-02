@@ -113,6 +113,7 @@ const SECRET_NAMES = [
   'ROZU_TOKEN_SECRET',
   'KV_REST_API_TOKEN',
   'UPSTASH_REDIS_REST_TOKEN',
+  'SUPABASE_SERVICE_ROLE_KEY',
 ];
 const SECRET_SHAPES = [/sk-ant-[A-Za-z0-9_-]{8,}/, /eyJ[A-Za-z0-9_-]{20,}\./];
 const clientFiles = walk(join(ROOT, '.next/static'));

@@ -41,6 +41,9 @@ const AI_MSGS = ['Analysing your heritage', 'Mapping your skin biology', 'Person
      SID_KEY    — per browser. Recovers a purchase whose tab was closed. */
 const DRAFT_KEY = 'rozu_draft';
 const SID_KEY = 'rozu_sid';
+/* Preview mode. Typed once as ?preview=... then remembered for the tab, so
+   restarting the quiz does not mean re-typing the key every time. */
+const PREVIEW_KEY = 'rozu_preview';
 const DRAFT_TTL_MS = 60 * 60 * 1000;
 const SID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'ttclid', 'li_fat_id'];
@@ -242,53 +245,6 @@ export function RozuApp() {
    *  customer when it fails) or is a silent background recovery attempt. */
   const resumeLoud = useRef(true);
 
-  const doPurchase = useCallback(async () => {
-    if (busy.current) return;
-    busy.current = true;
-
-    const plan: Plan = mode === 'couple' && bothDone ? 'couple' : 'solo';
-    const utm: Record<string, string> = {};
-    const q = new URLSearchParams(window.location.search);
-    for (const k of UTM_KEYS) {
-      const v = q.get(k);
-      if (v) utm[k] = v;
-    }
-
-    /* Written before we navigate away: if the customer abandons the checkout
-       and presses back, this is what puts them on the preview instead of the
-       landing page with an empty quiz. */
-    const draft: Draft = { t: Date.now(), mode, bothDone, selfAns, selfLife, partAns, partLife };
-    safeSet('session', DRAFT_KEY, JSON.stringify(draft));
-
-    setAiMsg('Opening secure checkout…');
-    setResultPhase('building');
-
-    try {
-      const r = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          plan,
-          self: { heritage: heritageOf(selfAns), skin: skinOf(selfAns), life: selfLife },
-          partner: plan === 'couple' ? { heritage: heritageOf(partAns), skin: skinOf(partAns), life: partLife } : null,
-          utm,
-        }),
-      });
-      if (!r.ok) throw new Error(`checkout ${r.status}`);
-      const d = (await r.json()) as { url?: string; sid?: string };
-      if (!d.url || !d.sid) throw new Error('checkout returned nothing');
-
-      // Last thing before leaving: the recovery handle for a closed tab.
-      safeSet('local', SID_KEY, d.sid);
-      window.location.href = d.url;
-    } catch (e) {
-      console.warn('[checkout]', e);
-      busy.current = false;
-      setResultPhase('preview');
-      toast('Could not open checkout. Please try again.', false);
-    }
-  }, [mode, bothDone, selfAns, selfLife, partAns, partLife, toast]);
-
   /** Waits for the webhook, then fetches the paid-for routine. */
   const resume = useCallback(
     async (sid: string, loud: boolean) => {
@@ -401,6 +357,68 @@ export function RozuApp() {
     [show, toast],
   );
 
+  const doPurchase = useCallback(async () => {
+    if (busy.current) return;
+    busy.current = true;
+
+    const plan: Plan = mode === 'couple' && bothDone ? 'couple' : 'solo';
+    const utm: Record<string, string> = {};
+    const q = new URLSearchParams(window.location.search);
+    for (const k of UTM_KEYS) {
+      const v = q.get(k);
+      if (v) utm[k] = v;
+    }
+
+    const fromUrl = q.get('preview');
+    if (fromUrl) safeSet('session', PREVIEW_KEY, fromUrl);
+    const preview = fromUrl ?? safeGet('session', PREVIEW_KEY) ?? '';
+
+    /* Written before we navigate away: if the customer abandons the checkout
+       and presses back, this is what puts them on the preview instead of the
+       landing page with an empty quiz. */
+    const draft: Draft = { t: Date.now(), mode, bothDone, selfAns, selfLife, partAns, partLife };
+    safeSet('session', DRAFT_KEY, JSON.stringify(draft));
+
+    setAiMsg('Opening secure checkout…');
+    setResultPhase('building');
+
+    try {
+      const r = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan,
+          self: { heritage: heritageOf(selfAns), skin: skinOf(selfAns), life: selfLife },
+          partner: plan === 'couple' ? { heritage: heritageOf(partAns), skin: skinOf(partAns), life: partLife } : null,
+          utm,
+          ...(preview ? { preview } : {}),
+        }),
+      });
+      if (!r.ok) throw new Error(`checkout ${r.status}`);
+      const d = (await r.json()) as { url?: string; sid?: string; preview?: boolean };
+
+      /* Preview: the order is already marked paid, so there is nowhere to send
+         the browser. Drop straight into the same post-payment path a real
+         customer lands on. */
+      if (d.preview && d.sid) {
+        busy.current = false;
+        void resume(d.sid, true);
+        return;
+      }
+
+      if (!d.url || !d.sid) throw new Error('checkout returned nothing');
+
+      // Last thing before leaving: the recovery handle for a closed tab.
+      safeSet('local', SID_KEY, d.sid);
+      window.location.href = d.url;
+    } catch (e) {
+      console.warn('[checkout]', e);
+      busy.current = false;
+      setResultPhase('preview');
+      toast('Could not open checkout. Please try again.', false);
+    }
+  }, [mode, bothDone, selfAns, selfLife, partAns, partLife, toast, resume]);
+
   /* On load, work out which of three arrivals this is:
        ?sid= in the URL   — just came back from checkout, wait for the webhook
        a stored sid       — a purchase whose tab was closed; check it silently
@@ -448,11 +466,18 @@ export function RozuApp() {
 
   const restart = useCallback(() => {
     safeDel('session', DRAFT_KEY);
+    // PREVIEW_KEY deliberately survives: restarting the quiz in preview mode
+    // should stay in preview mode.
     safeDel('local', SID_KEY);
     busy.current = false;
-    // Drop ?sid= so a reload does not pull the finished order back up.
-    if (window.location.search) {
-      window.history.replaceState(null, '', window.location.pathname);
+    /* Drop ?sid= so a reload does not pull the finished order back up. Any
+       other parameter is kept — stripping ?preview= here would kick a review
+       session back into paying mode halfway through. */
+    const q = new URLSearchParams(window.location.search);
+    if (q.has('sid')) {
+      q.delete('sid');
+      const rest = q.toString();
+      window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : ''));
     }
     setMode(null);
     setCQ(0);

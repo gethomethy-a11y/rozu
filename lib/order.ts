@@ -29,6 +29,9 @@ export type OrderRecord = {
   orderId?: string;
   /** Attribution captured at checkout; consumed by step 4. */
   utm?: Record<string, string>;
+  /* Created through preview mode, so no money changed hands. Kept on the record
+     so these never get counted as revenue when analytics land in step 4. */
+  preview?: boolean;
 };
 
 export type GeneratedRoutines = {

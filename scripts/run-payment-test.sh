@@ -19,6 +19,7 @@ export LEMONSQUEEZY_VARIANT_SOLO="20001"
 export LEMONSQUEEZY_VARIANT_COUPLE="20002"
 export LEMONSQUEEZY_WEBHOOK_SECRET="test-webhook-secret-$(openssl rand -hex 8)"
 export ROZU_TOKEN_SECRET="test-token-secret-$(openssl rand -hex 16)"
+export ROZU_PREVIEW_KEY="test-preview-key-$(openssl rand -hex 12)"
 # Which storage driver to exercise. Both are run by `npm run test:payment`.
 STORAGE="${STORAGE:-upstash}"
 if [[ "$STORAGE" == "supabase" ]]; then

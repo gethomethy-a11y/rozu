@@ -9,6 +9,7 @@ import {
   type Profile,
 } from '@/lib/order';
 import { kvConfigured, kvSet } from '@/lib/kv';
+import { previewKeyValid } from '@/lib/preview';
 import type { Plan } from '@/lib/paidToken';
 
 export const runtime = 'nodejs';
@@ -54,6 +55,36 @@ export async function POST(req: Request) {
   const partner: Profile | null = plan === 'couple' ? parseProfile(body.partner) : null;
   if (plan === 'couple' && !partner) {
     return NextResponse.json({ error: 'bad request' }, { status: 400 });
+  }
+
+  /* PREVIEW. Skips Lemon Squeezy and nothing else: the order below is written
+     exactly as a real one, already marked paid, so the rest of the pipeline —
+     token, generate-once, caching — runs untouched. Requires the key. */
+  const wantsPreview = typeof body.preview === 'string' && body.preview.length > 0;
+  if (wantsPreview) {
+    if (!previewKeyValid(body.preview)) {
+      console.warn('[checkout] preview key rejected');
+      return NextResponse.json({ error: 'invalid preview key' }, { status: 403 });
+    }
+
+    const sid = randomUUID();
+    const record: OrderRecord = {
+      plan,
+      status: 'paid',
+      self,
+      partner,
+      createdAt: Date.now(),
+      orderId: `preview-${sid}`,
+      preview: true,
+    };
+    try {
+      await kvSet(orderKey(sid), record, ORDER_TTL_SECONDS);
+    } catch (e) {
+      console.error('[checkout] preview could not persist order:', e instanceof Error ? e.message : e);
+      return NextResponse.json({ error: 'preview unavailable' }, { status: 503 });
+    }
+    console.warn(`[checkout] PREVIEW order ${sid} (${plan}) — no payment taken`);
+    return NextResponse.json({ preview: true, sid });
   }
 
   /* Both of these are fatal rather than degradable. An order we cannot store is

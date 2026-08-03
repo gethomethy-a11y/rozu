@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { kvBacking, kvConfigured, kvDel, kvGet, kvSet } from '@/lib/kv';
 import { testMode } from '@/lib/lemonsqueezy';
+import { previewEnabled } from '@/lib/preview';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -110,6 +111,8 @@ export async function GET() {
     'SUPABASE_SERVICE_ROLE_KEY',
     'SUPABASE_ANON_KEY',
     'LEMONSQUEEZY_API_BASE',
+    'ROZU_PREVIEW_KEY',
+    'LEMONSQUEEZY_TEST_MODE',
     'ANTHROPIC_BASE_URL',
     'ANTHROPIC_AUTH_TOKEN',
   ]);
@@ -233,6 +236,13 @@ export async function GET() {
   say();
   say('   When everything above says OK, DELETE the ROZU_SETUP variable in');
   say('   Vercel. This page turns itself off without it.');
+
+  if (previewEnabled()) {
+    say();
+    say('   *** PREVIEW MODE IS ON ***');
+    say('   Anyone with the ROZU_PREVIEW_KEY value can get a full routine');
+    say('   without paying. Delete that variable before launch.');
+  }
 
   if (kvBacking() !== 'upstash') {
     say();

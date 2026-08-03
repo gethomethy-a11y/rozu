@@ -157,7 +157,7 @@ await new Promise((r) => mock.listen(MOCK_PORT, '127.0.0.1', r));
 const soloProfile = { heritage: 'Southeast Asian', skin: 'Combination', life: { sleep: 1, stress: 1, diet: 1 } };
 const partnerProfile = { heritage: 'Black / African', skin: 'Dry', life: { sleep: 2, stress: 0, diet: 2 } };
 
-async function startCheckout(plan) {
+async function startCheckout(plan, extra = {}) {
   const before = checkouts.length;
   const res = await fetch(`${APP}/api/checkout`, {
     method: 'POST',
@@ -167,6 +167,7 @@ async function startCheckout(plan) {
       self: soloProfile,
       partner: plan === 'couple' ? partnerProfile : null,
       utm: { utm_source: 'tiktok', ttclid: 'abc123' },
+      ...extra,
     }),
   });
   const json = await res.json();
@@ -351,6 +352,43 @@ console.log('\n=== 6. Checkout input validation ===');
     'malformed sid on /api/paid → 400',
     (await fetch(`${APP}/api/paid?sid=../../etc/passwd`)).status === 400,
   );
+}
+
+/* ── 7. Preview mode ─────────────────────────────────────────────────────── */
+/* Preview must be a door with a lock on it, not a hole. It has to work with the
+   key, be invisible without it, and — the part that actually matters — must not
+   weaken the paywall for anyone who does not have it. */
+console.log('\n=== 7. Preview mode ===');
+{
+  const KEY = process.env.ROZU_PREVIEW_KEY;
+
+  const wrong = await startCheckout('solo', { preview: 'wrong-key-wrong-key-wrong' });
+  check('wrong preview key → 403', wrong.res.status === 403, `got ${wrong.res.status}`);
+  check('wrong preview key creates no checkout', wrong.checkout === undefined);
+
+  const empty = await startCheckout('solo', { preview: '' });
+  check('empty preview key falls through to a real checkout', Boolean(empty.json.url));
+
+  const ok = await startCheckout('solo', { preview: KEY });
+  check('correct preview key → 200', ok.res.status === 200, `got ${ok.res.status}`);
+  check('preview returns no checkout url', !ok.json.url && ok.json.preview === true);
+  check('preview never contacts Lemon Squeezy', ok.checkout === undefined);
+
+  const sid = ok.json.sid;
+  const paid = await (await getPaid(sid)).json();
+  check('preview order is already paid', paid.status === 'paid' && Boolean(paid.token));
+
+  const genRes = await generate(sid, paid.token);
+  const gen = await genRes.json();
+  check('preview generates a real routine', genRes.status === 200 && Array.isArray(gen.self?.morning));
+  check('preview goes through the same caching', (await (await generate(sid, paid.token)).json()).source === 'cached');
+
+  // The whole point of the lock: knowing a preview sid must not unlock anything
+  // else, and preview must not have made the gate any weaker.
+  const other = await startCheckout('solo');
+  check('a normal order is still unpaid alongside preview', (await (await getPaid(other.json.sid)).json()).status === 'pending');
+  check('preview token does not unlock another order', (await generate(other.json.sid, paid.token)).status === 402);
+  check('a preview sid without a token is still 402', (await generate(sid, 'no')).status === 402);
 }
 
 mock.close();

@@ -308,3 +308,30 @@ body{font-family:'Inter',sans-serif;background:#f7f5f6;color:#111;min-height:100
 .sheet-hint{font-size:11px;color:var(--mu);text-align:center;line-height:1.5;}
 .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(80px);background:#1a1a1a;color:#fff;padding:12px 22px;border-radius:50px;font-size:13px;font-weight:600;z-index:1000;opacity:0;transition:all .3s cubic-bezier(.3,0,.2,1);display:flex;align-items:center;gap:8px;box-shadow:0 8px 28px #00000035;pointer-events:none;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ═══════════════════════════════════════════════════════════
+   SHARE CARD
+   Added after the verbatim prototype stylesheet — additions
+   only, no rule above this line is touched. This is the one
+   surface built to be screenshotted and posted, so it states
+   its own context and reads at thumbnail size.
+   ═══════════════════════════════════════════════════════════ */
+.scard{background:var(--card);border:1px solid var(--bd);border-radius:20px;padding:24px 22px 20px;margin-bottom:18px;box-shadow:0 4px 20px #00000010;}
+.scard-brand{font-size:10px;font-weight:800;letter-spacing:0.28em;color:var(--su);margin-bottom:18px;}
+.scard-h{font-size:25px;font-weight:800;line-height:1.25;letter-spacing:-0.025em;color:#111;margin-bottom:22px;}
+.scard-pct{color:var(--plum);}
+.scard-bar{height:9px;border-radius:5px;background:#f0ecee;overflow:hidden;}
+.scard-bar-f{height:100%;border-radius:5px;background:var(--plum);transition:width .5s cubic-bezier(.3,0,.2,1);}
+.scard-legend{display:flex;justify-content:space-between;margin-top:8px;font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--su);}
+.scard-legend .on{color:var(--plum);}
+.scard-rule{height:1px;background:var(--bd);margin:18px 0;}
+.scard-list{list-style:none;display:flex;flex-direction:column;gap:13px;}
+.scard-list li{display:flex;align-items:flex-start;gap:11px;font-size:15px;font-weight:600;color:var(--su);line-height:1.35;}
+/* Scoped name on purpose: a bare .shared already exists for the Together
+   tab's cards, and reusing it drew a bordered box around every line. */
+.scard-list li.scard-on{color:#111;font-weight:700;}
+.scard-dot{width:8px;height:8px;border-radius:50%;background:#ddd7da;flex-shrink:0;margin-top:5px;}
+.scard-list li.scard-on .scard-dot{background:var(--plum);}
+.scard-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.scard-pair{font-size:11.5px;font-weight:700;color:var(--mu);line-height:1.4;}
+.scard-mark{font-size:10px;font-weight:800;letter-spacing:0.28em;color:var(--su);flex-shrink:0;}

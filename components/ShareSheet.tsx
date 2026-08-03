@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { IC, Raw, box } from '@/lib/icons';
 import type { Mode } from '@/lib/quiz';
 import { routineText, shortText, type ShareState } from '@/lib/routineText';
+import type { CoupleInfo } from './RozuApp';
+import { ShareCard } from './ShareCard';
 
 export type ToastFn = (msg: string, ok?: boolean) => void;
 
@@ -74,6 +76,7 @@ export function ShareSheet({
   toast,
   copyText,
   taRef,
+  couple,
 }: {
   open: boolean;
   onClose: () => void;
@@ -81,6 +84,7 @@ export function ShareSheet({
   toast: ToastFn;
   copyText: (str: string, okMsg: string) => void;
   taRef: React.RefObject<HTMLTextAreaElement | null>;
+  couple: CoupleInfo | null;
 }) {
   const mode: Mode | null = share.mode;
   const [doneIds, setDoneIds] = useState<Record<string, boolean>>({});
@@ -241,6 +245,24 @@ export function ShareSheet({
         <div className="sheet-s" id="sheetSub">
           {mode === 'couple' ? 'Both profiles and your shared steps.' : 'Pick how you want to send it.'}
         </div>
+
+        {/* Above the send options on purpose: the card is the thing worth
+            sharing, and most people will screenshot it rather than pick a
+            channel. Couple mode only — there is no second heritage to compare
+            on a solo routine. */}
+        {mode === 'couple' && couple && (
+          <>
+            <ShareCard
+              pct={couple.match.pct}
+              h1={share.h}
+              h2={share.ph}
+              factors={couple.facts.factors}
+            />
+            <div className="sheet-hint" style={{ marginTop: '-8px', marginBottom: '18px' }}>
+              Screenshot the card above to post it, or pick a way to send the full routine.
+            </div>
+          </>
+        )}
         <div className="sheet-opts" id="sheetOpts">
           {opts.map((o) => (
             <button

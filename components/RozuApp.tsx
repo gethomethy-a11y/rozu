@@ -60,6 +60,7 @@ export type CoupleInfo = {
   sharedLife: ('sleep' | 'stress' | 'diet')[];
   /** Only what their answers support — see lib/match.ts. */
   facts: {
+    factors: { label: string; shared: boolean }[];
     concerns: string[];
     habits: { key: 'sleep' | 'stress' | 'diet'; answer: string }[];
     skinSame: boolean;
@@ -667,6 +668,7 @@ export function RozuApp() {
         toast={toast}
         copyText={copyText}
         taRef={taRef}
+        couple={routine.couple}
       />
 
       <Toast show={toastState.show} msg={toastState.msg} ok={toastState.ok} />

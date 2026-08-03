@@ -112,7 +112,15 @@ function reasonFor(
    2am. This returns only what their answers actually support, so a card can
    never claim a habit they do not have. */
 
+/* The lines the share card prints. A fixed set of dimensions rather than
+   whatever happened to overlap, so the card has the same shape for every couple
+   — including one with nothing in common, where an empty list would look like a
+   bug rather than a result. */
+export type Factor = { label: string; shared: boolean };
+
 export type TogetherFacts = {
+  /** Ordered for the share card: shared first, then what they do not share. */
+  factors: Factor[];
   /** Concern labels both partners selected. */
   concerns: string[];
   /** Lifestyle answers they gave identically, with the answer itself. */
@@ -129,8 +137,36 @@ const LIFE_OPTS: Record<keyof Life, string[]> = {
   diet: DIET_OPTS,
 };
 
+function shareCardFactors(a: Profile, b: Profile): Factor[] {
+  const out: Factor[] = [];
+
+  const concerns = sharedConcerns(a, b);
+  if (concerns.length) for (const c of concerns.slice(0, 2)) out.push({ label: c, shared: true });
+  else out.push({ label: 'Concerns — no overlap', shared: false });
+
+  const sleepSame = a.life.sleep !== null && a.life.sleep === b.life.sleep;
+  out.push(
+    sleepSame
+      ? { label: `Sleep — ${(SLEEP_OPTS[a.life.sleep as number] ?? '').toLowerCase()}`, shared: true }
+      : { label: 'Sleep — different patterns', shared: false },
+  );
+
+  out.push(
+    a.skin === b.skin
+      ? { label: `Skin type — both ${a.skin.toLowerCase()}`, shared: true }
+      : { label: `Skin type — ${a.skin} vs ${b.skin}`, shared: false },
+  );
+
+  // Always true, and the one thing every couple can hold each other to. It is
+  // what keeps the card from being entirely grey for a couple with no overlap.
+  out.push({ label: 'Both need daily SPF', shared: true });
+
+  return [...out.filter((f) => f.shared), ...out.filter((f) => !f.shared)];
+}
+
 export function togetherFacts(a: Profile, b: Profile): TogetherFacts {
   return {
+    factors: shareCardFactors(a, b),
     concerns: sharedConcerns(a, b),
     habits: sharedLife(a, b).map((k) => ({ key: k, answer: LIFE_OPTS[k][a.life[k] as number] ?? '' })),
     skinSame: a.skin === b.skin,

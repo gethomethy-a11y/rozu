@@ -50,8 +50,16 @@ async function lsGet(path: string, key: string): Promise<JsonApi | string> {
   }
 }
 
+/* Accept the obvious ways someone types "on". A stray space or the word "true"
+   is a configuration slip, not an intent to leave this page disabled — and the
+   failure it produces (a bare 404) gives no hint what went wrong. */
+function setupEnabled(): boolean {
+  const v = (process.env.ROZU_SETUP ?? '').trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+}
+
 export async function GET() {
-  if (process.env.ROZU_SETUP !== '1') {
+  if (!setupEnabled()) {
     return new NextResponse('Not found', { status: 404 });
   }
 

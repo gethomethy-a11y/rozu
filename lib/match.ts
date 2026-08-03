@@ -9,17 +9,24 @@
  * people must always get the same number, it costs nothing, and it can explain
  * itself in a line of copy underneath.
  *
- * The range is deliberately 68–97 and never 100. Nobody paid $12 to be told
- * they are 34% compatible with their partner, and a perfect score reads as a
- * gimmick rather than a measurement.
+ * The range is 5–98. It used to be floored at 68 so the number was never
+ * unflattering, but the share card puts a bar next to it: a couple with nothing
+ * in common got a two-thirds-full bar above four greyed-out lines, and the card
+ * contradicted itself. An honest low number is also the more interesting one to
+ * post — and "your skin agrees on 15% of what matters" is a statement about two
+ * sets of pores, not about a relationship.
+ *
+ * Heritage deliberately does NOT enter the score. Two different heritages are
+ * the premise of the product, not a defect in the couple, and docking them for
+ * it would contradict everything the rest of the app says.
  */
 import { CONCERN_LABELS, DIET_OPTS, SLEEP_OPTS, STRESS_OPTS, type Life } from './quiz';
 import type { Profile } from './order';
 
 export type Match = { pct: number; reason: string };
 
-const MIN_PCT = 68;
-const SPAN = 29;
+const MIN_PCT = 5;
+const SPAN = 93;
 
 /** Skin types that can genuinely share products, as opposed to merely coexist. */
 const SKIN_AFFINITY: Record<string, string[]> = {
@@ -67,12 +74,13 @@ export function matchOf(a: Profile, b: Profile): Match {
   const life = lifeAgreement(a.life, b.life);
   const concerns = concernOverlap(a.concerns ?? [], b.concerns ?? []);
   const skin = skinAffinity(a.skin, b.skin);
-  const sameHeritage = a.heritage === b.heritage ? 1 : 0;
 
-  const score = 0.35 * life + 0.3 * concerns + 0.25 * skin + 0.1 * sameHeritage;
-  const pct = Math.round(MIN_PCT + score * SPAN);
+  // What actually shapes a routine: what you are treating, how you live, and
+  // what your skin will tolerate.
+  const score = 0.35 * concerns + 0.35 * life + 0.3 * skin;
+  const pct = Math.min(98, Math.max(MIN_PCT, Math.round(MIN_PCT + score * SPAN)));
 
-  return { pct, reason: reasonFor(a, b, { life, concerns, skin, sameHeritage }) };
+  return { pct, reason: reasonFor(a, b, { life, concerns, skin, sameHeritage: a.heritage === b.heritage ? 1 : 0 }) };
 }
 
 /* One line under the score saying what it is actually reading. Ordered by how

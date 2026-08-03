@@ -419,8 +419,18 @@ console.log('\n=== 8. Couple match score ===');
   check('a match is returned for couples', Boolean(same?.match), JSON.stringify(same));
   check('identical partners score higher than opposite ones', same.match.pct > different.match.pct,
     `${same.match.pct} vs ${different.match.pct}`);
-  check('score stays inside 68-97', [same, different].every((c) => c.match.pct >= 68 && c.match.pct <= 97),
+  check('score stays inside 5-98', [same, different].every((c) => c.match.pct >= 5 && c.match.pct <= 98),
     `${same.match.pct}, ${different.match.pct}`);
+  check('identical partners land near the top', same.match.pct >= 90, `${same.match.pct}`);
+  check('partners with nothing in common land low', different.match.pct <= 45, `${different.match.pct}`);
+  /* Two different heritages are the premise of the product, not a defect in
+     the couple. Identical answers with different heritages must score the same
+     as identical answers with the same heritage. */
+  const sameHeritage = await scoreFor(twin, twin);
+  const crossHeritage = await scoreFor(twin, { ...twin, heritage: 'Northern European' });
+  check('heritage alone does not move the score',
+    sameHeritage.match.pct === crossHeritage.match.pct,
+    `${sameHeritage.match.pct} vs ${crossHeritage.match.pct}`);
   check('it is not the hardcoded 87 for everyone', same.match.pct !== 87 || different.match.pct !== 87);
   check('the reason names a real shared concern', /acne|puffiness|fine lines|dark spots/i.test(same.match.reason),
     same.match.reason);

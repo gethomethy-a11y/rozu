@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { kvBacking, kvConfigured, kvDel, kvGet, kvSet } from '@/lib/kv';
 import { testMode } from '@/lib/lemonsqueezy';
-import { previewEnabled } from '@/lib/preview';
+import { previewEnabled, previewKeyLength, previewKeyValid } from '@/lib/preview';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -64,7 +64,7 @@ function setupEnabled(): boolean {
   return v === '1' || v === 'true' || v === 'yes' || v === 'on';
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   if (!setupEnabled()) {
     return new NextResponse('Not found', { status: 404 });
   }
@@ -72,6 +72,48 @@ export async function GET() {
   const out: string[] = [];
   const say = (s = '') => out.push(s);
   const suggested: string[] = [];
+
+  /* ?trypreview=<value> answers "would this exact value work?".
+     Deliberately routed through a query parameter: that puts the candidate
+     through the same URL decoding the real checkout sees, so a key broken by a
+     "+" or a "#" fails here for the same reason and is visible instead of
+     mysterious. Comparing lengths is usually enough to spot it. */
+  const candidate = new URL(req.url).searchParams.get('trypreview');
+  if (candidate !== null) {
+    const lines = ['PREVIEW KEY TEST', '================', ''];
+    if (!previewEnabled()) {
+      lines.push('   ROZU_PREVIEW_KEY is not set (or is under 16 characters).');
+      lines.push('   Set it in Vercel, redeploy, then try again.');
+    } else if (previewKeyValid(candidate)) {
+      lines.push('   MATCH. This value works. Use it as:');
+      lines.push('');
+      lines.push(`   /?preview=${encodeURIComponent(candidate.trim())}`);
+    } else {
+      lines.push('   NO MATCH.');
+      lines.push('');
+      lines.push(`   what you sent : ${candidate.trim().length} characters`);
+      lines.push(`   what Vercel has: ${previewKeyLength()} characters`);
+      lines.push('');
+      /* Order matters: a "+" decodes to a space without changing the length,
+         so the length check alone would call the single most likely cause a
+         typo and send you hunting for one that is not there. */
+      if (/\s/.test(candidate.trim())) {
+        lines.push('   What arrived contains a SPACE. In a URL a "+" decodes to a');
+        lines.push('   space, so a key containing "+" cannot survive the trip.');
+        lines.push('   Change the key to letters, digits and dashes only.');
+      } else if (candidate.trim().length !== previewKeyLength()) {
+        lines.push('   The lengths differ, so something ate part of it: everything');
+        lines.push('   after a "#" is dropped, and "&" starts a new parameter.');
+        lines.push('   Change the key to letters, digits and dashes only.');
+      } else {
+        lines.push('   Same length, no odd characters — so it is a plain typo, or');
+        lines.push('   the redeploy after saving the variable has not finished.');
+      }
+    }
+    return new NextResponse(lines.join('\n') + '\n', {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+    });
+  }
 
   say('ROZU SETUP CHECK');
   say('================');
@@ -239,7 +281,8 @@ export async function GET() {
 
   if (previewEnabled()) {
     say();
-    say('   *** PREVIEW MODE IS ON ***');
+    say(`   *** PREVIEW MODE IS ON *** (key is ${previewKeyLength()} characters)`);
+    say('   Test a key with:  /api/setup?trypreview=YOURKEY');
     say('   Anyone with the ROZU_PREVIEW_KEY value can get a full routine');
     say('   without paying. Delete that variable before launch.');
   }

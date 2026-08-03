@@ -21,17 +21,27 @@ import { timingSafeEqual } from 'node:crypto';
 /** Short keys are guessable, and a guessable key is an open paywall. */
 const MIN_KEY_LENGTH = 16;
 
+/* Both sides are trimmed. Pasting a value into a dashboard field on a phone
+   picks up a trailing space or newline remarkably often, and the resulting
+   failure is invisible — the value looks right in every UI that shows it. */
+function configured(): string {
+  return (process.env.ROZU_PREVIEW_KEY ?? '').trim();
+}
+
 export function previewEnabled(): boolean {
-  const k = process.env.ROZU_PREVIEW_KEY ?? '';
-  return k.length >= MIN_KEY_LENGTH;
+  return configured().length >= MIN_KEY_LENGTH;
+}
+
+export function previewKeyLength(): number {
+  return configured().length;
 }
 
 export function previewKeyValid(given: unknown): boolean {
   if (!previewEnabled()) return false;
   if (typeof given !== 'string' || !given) return false;
 
-  const want = Buffer.from(process.env.ROZU_PREVIEW_KEY ?? '', 'utf8');
-  const got = Buffer.from(given, 'utf8');
+  const want = Buffer.from(configured(), 'utf8');
+  const got = Buffer.from(given.trim(), 'utf8');
   // timingSafeEqual throws on a length mismatch, so screen for that first.
   if (got.length !== want.length) return false;
   return timingSafeEqual(got, want);

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { kvBacking, kvConfigured, kvDel, kvGet, kvSet } from '@/lib/kv';
+import { testMode } from '@/lib/lemonsqueezy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,10 @@ export const dynamic = 'force-dynamic';
  * whether it is present. Delete the ROZU_SETUP variable when finished. */
 
 const API = process.env.LEMONSQUEEZY_API_BASE ?? 'https://api.lemonsqueezy.com/v1';
+
+/* Lemon Squeezy will not sell a product whose variant is not published, and a
+   store that has not finished activation holds its variants at "pending". */
+const LIVE_STATUS = 'published';
 
 const REQUIRED = [
   'ANTHROPIC_API_KEY',
@@ -92,6 +97,13 @@ export async function GET() {
     'ROZU_SITE_URL',
     'KV_REST_API_URL',
     'KV_REST_API_TOKEN',
+    /* Also written by Vercel's Upstash integration. We do not read them — the
+       REST pair above is enough — but they are correct, not misspelled, and
+       telling someone to "rename" them would be actively wrong. */
+    'KV_URL',
+    'KV_REST_API_READ_ONLY_TOKEN',
+    'REDIS_URL',
+    'UPSTASH_REDIS_REST_READ_ONLY_TOKEN',
     'UPSTASH_REDIS_REST_URL',
     'UPSTASH_REDIS_REST_TOKEN',
     'SUPABASE_URL',
@@ -148,6 +160,12 @@ export async function GET() {
   say();
   say('3. YOUR LEMON SQUEEZY ACCOUNT');
   say();
+  say(
+    testMode()
+      ? '   TEST MODE IS ON — checkouts take test cards only, no real money.'
+      : '   LIVE MODE — checkouts charge real cards.',
+  );
+  say();
   const key = process.env.LEMONSQUEEZY_API_KEY;
   if (!key) {
     say('   Cannot look anything up until LEMONSQUEEZY_API_KEY is set.');
@@ -186,6 +204,12 @@ export async function GET() {
           const status = a.status ? ` [${a.status}]` : '';
           say(`     ${pname} / ${a.name}${price}${status}`);
           say(`       variant id: ${v.id}`);
+          if (a.status && a.status !== LIVE_STATUS) {
+            say(`       NOTE: status is "${a.status}", not "${LIVE_STATUS}" — this`);
+            say('             cannot be bought with real money yet. Finish Store');
+            say('             activation (business details + identity');
+            say('             verification). Test mode still works meanwhile.');
+          }
 
           const n = String(pname).toLowerCase();
           if (n.includes('couple')) suggested.push(`LEMONSQUEEZY_VARIANT_COUPLE=${v.id}`);

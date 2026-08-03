@@ -17,6 +17,16 @@ if (process.env.LEMONSQUEEZY_API_BASE && process.env.NODE_ENV === 'production') 
   console.warn(`[lemonsqueezy] API base overridden to ${process.env.LEMONSQUEEZY_API_BASE}`);
 }
 
+/* Test mode is per checkout, not per API key, so it has to be sent explicitly.
+   Anything other than an explicit "off" value means test — a store that has not
+   finished activation cannot take real money anyway, and defaulting the other
+   way risks a live charge during testing. Set LEMONSQUEEZY_TEST_MODE=0 to go
+   live. */
+export function testMode(): boolean {
+  const v = (process.env.LEMONSQUEEZY_TEST_MODE ?? '').trim().toLowerCase();
+  return !(v === '0' || v === 'false' || v === 'no' || v === 'off');
+}
+
 export function lsConfigured(): boolean {
   return Boolean(
     process.env.LEMONSQUEEZY_API_KEY &&
@@ -70,6 +80,7 @@ export async function createCheckout(opts: {
           receipt_link_url: opts.redirectUrl,
         },
         checkout_options: { embed: false },
+        test_mode: testMode(),
       },
       relationships: {
         store: { data: { type: 'stores', id: String(storeId) } },

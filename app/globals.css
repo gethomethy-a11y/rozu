@@ -337,3 +337,42 @@ body{font-family:'Inter',sans-serif;background:#f7f5f6;color:#111;min-height:100
 .scard-mark{font-size:10px;font-weight:800;letter-spacing:0.28em;color:var(--su);flex-shrink:0;}
 .scard-save{width:100%;margin-bottom:10px;}
 .scard-save:disabled{opacity:.6;cursor:default;transform:none;}
+
+/* ═══════════════════════════════════════════════════════════
+   LEGAL PAGES
+   Reachable without JavaScript and readable on a phone. Their
+   audience is a regulator, Lemon Squeezy's review team and an
+   ad platform's crawler, none of which run the app.
+   ═══════════════════════════════════════════════════════════ */
+.legal{max-width:680px;margin:0 auto;padding:34px 22px 70px;}
+.legal-back{display:inline-block;font-size:13px;font-weight:800;letter-spacing:0.22em;color:var(--plum);text-decoration:none;margin-bottom:28px;}
+.legal-h{font-size:27px;font-weight:800;letter-spacing:-0.02em;margin-bottom:6px;}
+.legal-date{font-size:12px;color:var(--su);margin-bottom:30px;}
+.legal h2{font-size:16px;font-weight:700;margin:30px 0 10px;}
+.legal h3{font-size:14px;font-weight:700;margin:20px 0 7px;}
+.legal p,.legal li{font-size:14px;line-height:1.72;color:#3d3439;}
+.legal p{margin-bottom:13px;}
+.legal ul{margin:0 0 13px 20px;}
+.legal li{margin-bottom:6px;}
+.legal a{color:var(--plum);}
+.legal-todo{background:#fdf3e0;border:1px solid #e8d5ae;border-radius:12px;padding:13px 15px;font-size:13px;line-height:1.6;margin-bottom:16px;color:#6b5427;}
+.legal-nav{display:flex;flex-wrap:wrap;gap:18px;margin-top:44px;padding-top:22px;border-top:1px solid var(--bd);font-size:13px;}
+.legal-nav a{color:var(--mu);text-decoration:none;}
+
+/* Footer on the landing screen — the legal pages have to be reachable from
+   the page a customer actually lands on, not only by typing a URL. */
+.foot{padding:26px 20px 34px;display:flex;flex-wrap:wrap;justify-content:center;gap:16px;font-size:12px;}
+.foot a{color:var(--su);text-decoration:none;}
+.foot a:hover{color:var(--mu);}
+
+/* Consent banner. Both buttons are the same size on purpose: a decline that is
+   harder to click than an accept is not valid consent. */
+.consent{position:fixed;left:0;right:0;bottom:0;z-index:950;padding:12px;display:flex;justify-content:center;}
+.consent-b{background:var(--card);border:1px solid var(--bd);border-radius:18px;box-shadow:0 10px 40px #00000022;padding:18px 19px;max-width:440px;width:100%;}
+.consent-t{font-size:14.5px;font-weight:700;margin-bottom:6px;}
+.consent-s{font-size:12px;line-height:1.6;color:var(--mu);margin-bottom:14px;}
+.consent-s a{color:var(--plum);}
+.consent-btns{display:flex;gap:9px;}
+.consent-btn{flex:1;border:none;border-radius:11px;font-family:'Inter',sans-serif;font-weight:700;font-size:13px;padding:12px 8px;cursor:pointer;}
+.consent-btn.a{background:var(--plum);color:#fff;}
+.consent-btn.d{background:#f0edef;color:#4a4247;}

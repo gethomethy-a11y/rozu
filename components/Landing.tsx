@@ -197,6 +197,16 @@ export function Landing({
           </div>
         </div>
       </div>
-    </div>
+
+      {/* The legal pages have to be reachable from the page a customer actually
+          lands on. A URL you can only reach by typing it is not "provided". */}
+      <div className="foot">
+        {/* "Impressum" stays German — it is a German legal instrument with no
+            English equivalent, and is left untranslated on English sites. */}
+        <a href="/impressum">Impressum</a>
+        <a href="/datenschutz">Privacy</a>
+        <a href="/widerruf">Terms &amp; seller</a>
+      </div>
+</div>
   );
 }

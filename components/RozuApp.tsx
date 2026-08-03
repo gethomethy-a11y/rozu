@@ -239,84 +239,43 @@ export function RozuApp() {
      Squeezy, and only generate once the webhook confirms the money arrived.
      Nothing on this path can reach the model without a verified payment. */
 
+  /* Held only while something is actually driving the result screen. The
+     background recovery below deliberately does NOT take it: a silent check
+     that held this for two minutes would make the Unlock button do nothing at
+     all, with no error and no explanation. */
   const busy = useRef(false);
 
-  /** Whether the running flow came back from a real redirect (worth telling the
-   *  customer when it fails) or is a silent background recovery attempt. */
-  const resumeLoud = useRef(true);
+  /** Asks whether this order is paid yet. Null means "not yet, or never". */
+  const fetchToken = useCallback(
+    async (sid: string): Promise<{ token: string; plan: Plan } | 'pending' | 'gone' | 'error'> => {
+      try {
+        const r = await fetch(`/api/paid?sid=${encodeURIComponent(sid)}`, { cache: 'no-store' });
+        if (r.status === 404) return 'gone';
+        if (r.status >= 500) return 'error';
+        if (!r.ok) return 'error';
+        const d = (await r.json()) as { status?: string; token?: string; plan?: Plan };
+        if (d.status === 'paid' && d.token && d.plan) return { token: d.token, plan: d.plan };
+        if (d.status === 'refunded') return 'gone';
+        return 'pending';
+      } catch {
+        return 'error';
+      }
+    },
+    [],
+  );
 
-  /** Waits for the webhook, then fetches the paid-for routine. */
-  const resume = useCallback(
-    async (sid: string, loud: boolean) => {
+  /** Fetches the paid-for routine and puts it on screen. */
+  const deliver = useCallback(
+    async (sid: string, token: string) => {
       if (busy.current) return;
       busy.current = true;
-      resumeLoud.current = loud;
-
-      if (loud) {
-        setAiMsg('Confirming your payment…');
-        setResultPhase('building');
-        show('result');
-      }
-
-      /* The webhook and the redirect race each other. Usually the webhook wins
-         and the first poll succeeds; if the customer is fast, or Lemon Squeezy
-         is slow, this waits it out rather than telling them the payment failed. */
-      const deadline = Date.now() + PAID_DEADLINE_MS;
-      let paid: { token: string; plan: Plan } | null = null;
-      let refunded = false;
-      /* A 5xx means the server is broken, not that the payment is still on its
-         way — waiting out the full two minutes would only make it look slow.
-         Tolerate a few in case it is a blip, then stop. */
-      let serverErrors = 0;
-
-      for (;;) {
-        try {
-          const r = await fetch(`/api/paid?sid=${encodeURIComponent(sid)}`, { cache: 'no-store' });
-          if (r.status === 404) break; // sid we never issued, or long expired
-          if (r.status >= 500) {
-            if (++serverErrors >= 5) break;
-          } else if (r.ok) {
-            serverErrors = 0;
-            const d = (await r.json()) as { status?: string; token?: string; plan?: Plan };
-            if (d.status === 'paid' && d.token && d.plan) {
-              paid = { token: d.token, plan: d.plan };
-              break;
-            }
-            if (d.status === 'refunded') {
-              refunded = true;
-              break;
-            }
-          }
-        } catch {
-          /* offline or a blip — keep waiting */
-        }
-        if (Date.now() > deadline) break;
-        await sleep(PAID_POLL_MS);
-      }
-
-      if (!paid) {
-        // Nothing was bought under this sid, so it is not a recovery handle.
-        safeDel('local', SID_KEY);
-        busy.current = false;
-        if (!loud) return;
-        setResultPhase('preview');
-        toast(
-          refunded ? 'This order was refunded.' : 'We could not confirm your payment. Please contact support.',
-          false,
-        );
-        return;
-      }
 
       safeDel('local', SID_KEY);
       safeDel('session', DRAFT_KEY);
 
-      if (!loud) {
-        setAiMsg(AI_MSGS[0]);
-        setResultPhase('building');
-        show('result');
-      } else {
-        setAiMsg(AI_MSGS[0]);
-      }
+      setAiMsg(AI_MSGS[0]);
+      setResultPhase('building');
+      show('result');
 
       let mi = 0;
       const iv = setInterval(() => {
@@ -328,7 +287,7 @@ export function RozuApp() {
         const r = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sid, token: paid.token }),
+          body: JSON.stringify({ sid, token }),
         });
         if (!r.ok) throw new Error(`generate ${r.status}`);
         const d = (await r.json()) as {
@@ -362,6 +321,71 @@ export function RozuApp() {
       }
     },
     [show, toast],
+  );
+
+  /** Back from checkout: wait for the webhook, then deliver. */
+  const resumeAfterRedirect = useCallback(
+    async (sid: string) => {
+      if (busy.current) return;
+      busy.current = true;
+
+      setAiMsg('Confirming your payment…');
+      setResultPhase('building');
+      show('result');
+
+      /* The webhook and the redirect race each other. Usually the webhook wins
+         and the first poll succeeds; if the customer is fast, or Lemon Squeezy
+         is slow, this waits it out rather than saying the payment failed.
+         A 5xx is the server being broken, not the payment being slow, so a few
+         of those end the wait early instead of burning the full two minutes. */
+      const deadline = Date.now() + PAID_DEADLINE_MS;
+      let result: Awaited<ReturnType<typeof fetchToken>> = 'pending';
+      let serverErrors = 0;
+
+      for (;;) {
+        result = await fetchToken(sid);
+        if (typeof result === 'object') break;
+        if (result === 'gone') break;
+        if (result === 'error' && ++serverErrors >= 5) break;
+        if (result === 'pending') serverErrors = 0;
+        if (Date.now() > deadline) break;
+        await sleep(PAID_POLL_MS);
+      }
+
+      busy.current = false;
+
+      if (typeof result !== 'object') {
+        safeDel('local', SID_KEY);
+        setResultPhase('preview');
+        toast(
+          result === 'gone'
+            ? 'This order is no longer available.'
+            : 'We could not confirm your payment. Please contact support.',
+          false,
+        );
+        return;
+      }
+
+      await deliver(sid, result.token);
+    },
+    [show, toast, fetchToken, deliver],
+  );
+
+  /* A purchase whose tab was closed. One check, no lock, no UI — if it is not
+     paid there is nothing to say, and blocking the app while we find out would
+     be far worse than never checking at all. */
+  const recoverQuietly = useCallback(
+    async (sid: string) => {
+      const result = await fetchToken(sid);
+      if (typeof result === 'object') {
+        await deliver(sid, result.token);
+        return;
+      }
+      // Only forget the handle when we know it is worthless. A network blip
+      // must not throw away a purchase that was actually made.
+      if (result === 'gone') safeDel('local', SID_KEY);
+    },
+    [fetchToken, deliver],
   );
 
   const doPurchase = useCallback(async () => {
@@ -401,15 +425,29 @@ export function RozuApp() {
           ...(preview ? { preview } : {}),
         }),
       });
+
+      // A rejected preview key is a setup mistake, not a payment failure, and
+      // saying "could not open checkout" would send you looking in the wrong place.
+      if (r.status === 403) {
+        busy.current = false;
+        setResultPhase('preview');
+        toast('Preview key is not valid.', false);
+        return;
+      }
       if (!r.ok) throw new Error(`checkout ${r.status}`);
+
       const d = (await r.json()) as { url?: string; sid?: string; preview?: boolean };
 
       /* Preview: the order is already marked paid, so there is nowhere to send
-         the browser. Drop straight into the same post-payment path a real
-         customer lands on. */
+         the browser. Pick up the token and go straight to the routine. */
       if (d.preview && d.sid) {
+        const result = await fetchToken(d.sid);
         busy.current = false;
-        void resume(d.sid, true);
+        if (typeof result === 'object') await deliver(d.sid, result.token);
+        else {
+          setResultPhase('preview');
+          toast('Preview could not be prepared.', false);
+        }
         return;
       }
 
@@ -424,11 +462,11 @@ export function RozuApp() {
       setResultPhase('preview');
       toast('Could not open checkout. Please try again.', false);
     }
-  }, [mode, bothDone, selfAns, selfLife, partAns, partLife, toast, resume]);
+  }, [mode, bothDone, selfAns, selfLife, partAns, partLife, toast, fetchToken, deliver]);
 
   /* On load, work out which of three arrivals this is:
        ?sid= in the URL   — just came back from checkout, wait for the webhook
-       a stored sid       — a purchase whose tab was closed; check it silently
+       a stored sid       — a purchase whose tab was closed; check it quietly
        a stored draft     — backed out of checkout; put the preview back
      Runs once. */
   const arrived = useRef(false);
@@ -438,15 +476,12 @@ export function RozuApp() {
 
     const fromUrl = new URLSearchParams(window.location.search).get('sid');
     if (fromUrl && SID_RE.test(fromUrl)) {
-      void resume(fromUrl, true);
+      void resumeAfterRedirect(fromUrl);
       return;
     }
 
     const stored = safeGet('local', SID_KEY);
-    if (stored && SID_RE.test(stored)) {
-      void resume(stored, false);
-      return;
-    }
+    if (stored && SID_RE.test(stored)) void recoverQuietly(stored);
 
     const rawDraft = safeGet('session', DRAFT_KEY);
     if (!rawDraft) return;
@@ -467,7 +502,7 @@ export function RozuApp() {
     } catch {
       safeDel('session', DRAFT_KEY);
     }
-  }, [resume, show]);
+  }, [resumeAfterRedirect, recoverQuietly, show]);
 
   /* ── RESULT ──────────────────────────────────────────── */
 

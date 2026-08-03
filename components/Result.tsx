@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { IC, Raw, box, lifeIcon, stepIcon } from '@/lib/icons';
 import type { Mode } from '@/lib/quiz';
 import type { Routine, Step } from '@/lib/types';
+import type { CoupleInfo } from './RozuApp';
 import { MatchBanner } from './MatchBanner';
 
 function SectionHead({ label }: { label: string }) {
@@ -131,6 +132,7 @@ export function Result({
   pp,
   ph,
   ps,
+  couple,
   onOpenSheet,
   onCopy,
 }: {
@@ -142,6 +144,7 @@ export function Result({
   pp: Routine | null;
   ph: string;
   ps: string;
+  couple: CoupleInfo | null;
   onOpenSheet: () => void;
   onCopy: () => void;
 }) {
@@ -150,7 +153,7 @@ export function Result({
   if (mode === 'couple' && bothDone && pp) {
     return (
       <>
-        <MatchBanner h1={h} h2={ph} subtitle="AI routine — unlocked" />
+        <MatchBanner h1={h} h2={ph} pct={couple?.match.pct ?? 87} subtitle={couple?.match.reason ?? 'AI routine — unlocked'} />
         <div className="tabs">
           <button className={'tab' + (tab === 'panelYou' ? ' active' : '')} onClick={() => setTab('panelYou')}>
             You

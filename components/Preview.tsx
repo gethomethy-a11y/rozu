@@ -1,7 +1,9 @@
 'use client';
 
 import { IC, Raw, box } from '@/lib/icons';
-import { heritageOf, skinOf, type Answers, type Mode } from '@/lib/quiz';
+import { matchOf } from '@/lib/match';
+import { profileOf } from '@/lib/order';
+import { heritageOf, skinOf, type Answers, type Life, type Mode } from '@/lib/quiz';
 import { MatchBanner } from './MatchBanner';
 
 export function Preview({
@@ -9,12 +11,16 @@ export function Preview({
   bothDone,
   selfAns,
   partAns,
+  selfLife,
+  partLife,
   onPurchase,
 }: {
   mode: Mode | null;
   bothDone: boolean;
   selfAns: Answers;
   partAns: Answers;
+  selfLife: Life;
+  partLife: Life;
   onPurchase: () => void;
 }) {
   const h = heritageOf(selfAns);
@@ -39,7 +45,12 @@ export function Preview({
   return (
     <>
       {mode === 'couple' && bothDone && (
-        <MatchBanner h1={h} h2={heritageOf(partAns)} subtitle="Your couple profile is ready" />
+        <MatchBanner
+          h1={h}
+          h2={heritageOf(partAns)}
+          pct={matchOf(profileOf(selfAns, selfLife), profileOf(partAns, partLife)).pct}
+          subtitle="Your couple profile is ready"
+        />
       )}
 
       <div className="hcard">

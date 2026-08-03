@@ -114,6 +114,26 @@ export const DIET_OPTS = ['Balanced, mostly whole foods', 'A lot of dairy or sug
 export function heritageOf(a: Answers): string { return HO[a.heritage as number] || 'Southeast Asian'; }
 export function skinOf(a: Answers): string { return SO[a.skintype as number] || 'Combination'; }
 
+/* The answer labels, read back off QS rather than retyped, so a wording change
+   in the quiz cannot silently drift from what the model is told. */
+const optLabels = (id: string): string[] => (QS.find((q) => q.id === id)?.opts ?? []).map((o) => o.lb);
+
+export const GENDER_LABELS = optLabels('gender');
+export const TONE_LABELS = optLabels('skintone');
+export const CONCERN_LABELS = optLabels('concerns');
+export const LEVEL_LABELS = optLabels('routine');
+
+const oneOf = (a: Answers, id: string): number | null => (typeof a[id] === 'number' ? (a[id] as number) : null);
+
+/** Indices, not labels: the server maps them itself, so nothing a browser
+ *  types can ever reach the model prompt. */
+export function concernsOf(a: Answers): number[] {
+  return Array.isArray(a.concerns) ? (a.concerns as number[]) : [];
+}
+export const toneOf = (a: Answers) => oneOf(a, 'skintone');
+export const genderOf = (a: Answers) => oneOf(a, 'gender');
+export const levelOf = (a: Answers) => oneOf(a, 'routine');
+
 export function canGo(q: Question, ca: Answers, cl: Life): boolean {
   if (q.type === 'multi') { const v = ca[q.id]; return Array.isArray(v) && v.length > 0; }
   if (q.type === 'lifestyle') return cl.sleep !== null && cl.stress !== null && cl.diet !== null;

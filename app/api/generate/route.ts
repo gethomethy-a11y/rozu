@@ -12,6 +12,7 @@ import {
   type OrderRecord,
   type Profile,
 } from '@/lib/order';
+import { matchOf, sharedConcerns, sharedLife } from '@/lib/match';
 import { verifyPaidToken } from '@/lib/paidToken';
 import { buildPrompt } from '@/lib/prompt';
 import { ROUTINE_SCHEMA, validateRoutine } from '@/lib/validate';
@@ -47,7 +48,7 @@ async function generateOne(client: Anthropic, p: Profile): Promise<Routine | nul
         effort: 'low',
         format: { type: 'json_schema', schema: ROUTINE_SCHEMA },
       },
-      messages: [{ role: 'user', content: buildPrompt(p.heritage, p.skin, p.life) }],
+      messages: [{ role: 'user', content: buildPrompt(p) }],
     });
 
     if (res.stop_reason === 'refusal') {
@@ -105,11 +106,22 @@ export async function POST(req: Request) {
     partner: record.partner ? { heritage: record.partner.heritage, skin: record.partner.skin } : null,
   };
 
+  /* Computed here rather than in the browser: after the payment redirect the
+     client holds only a sid, and both full profiles live on the order. */
+  const couple =
+    record.plan === 'couple' && record.partner
+      ? {
+          match: matchOf(record.self, record.partner),
+          sharedConcerns: sharedConcerns(record.self, record.partner),
+          sharedLife: sharedLife(record.self, record.partner),
+        }
+      : null;
+
   /* GENERATE ONCE. A refresh, a second tab, or a webhook retry must all return
      the routine the customer already has — not a new one, and not a second
      charge against the API. */
   const cached = await kvGet<GeneratedRoutines>(routineKey(sid));
-  if (cached) return NextResponse.json({ ...cached, plan: record.plan, profile, source: 'cached' });
+  if (cached) return NextResponse.json({ ...cached, plan: record.plan, profile, couple, source: 'cached' });
 
   const gotLock = await kvSetIfAbsent(genLockKey(sid), Date.now(), 120);
   if (!gotLock) {
@@ -119,7 +131,7 @@ export async function POST(req: Request) {
     while (Date.now() < deadline) {
       await sleep(LOCK_POLL_MS);
       const arrived = await kvGet<GeneratedRoutines>(routineKey(sid));
-      if (arrived) return NextResponse.json({ ...arrived, plan: record.plan, profile, source: 'cached' });
+      if (arrived) return NextResponse.json({ ...arrived, plan: record.plan, profile, couple, source: 'cached' });
     }
     console.warn(`[generate] lock wait expired for ${sid}, generating anyway`);
   }
@@ -154,5 +166,5 @@ export async function POST(req: Request) {
     console.error(`[generate] could not cache routine for ${sid}:`, e instanceof Error ? e.message : e);
   }
 
-  return NextResponse.json({ ...result, plan: record.plan, profile, source });
+  return NextResponse.json({ ...result, plan: record.plan, profile, couple, source });
 }

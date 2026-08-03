@@ -7,7 +7,23 @@
  * This is the single source of truth for entitlement. The token proves the
  * customer is who they say they are; this record says whether they are still
  * entitled. */
-import { emptyLife, type Life } from './quiz';
+import {
+  CONCERN_LABELS,
+  GENDER_LABELS,
+  HO,
+  LEVEL_LABELS,
+  SO,
+  TONE_LABELS,
+  concernsOf,
+  emptyLife,
+  genderOf,
+  heritageOf,
+  levelOf,
+  skinOf,
+  toneOf,
+  type Answers,
+  type Life,
+} from './quiz';
 import type { Plan } from './paidToken';
 import type { Routine } from './types';
 
@@ -15,6 +31,14 @@ export type Profile = {
   heritage: string;
   skin: string;
   life: Life;
+  /* Stored as indices, never as text. Everything here ends up inside a model
+     prompt, and an index into a fixed table cannot carry an instruction.
+     Optional because orders placed before these were collected still have to
+     be readable. */
+  concerns?: number[];
+  tone?: number | null;
+  gender?: number | null;
+  level?: number | null;
 };
 
 export type OrderStatus = 'pending' | 'paid' | 'refunded';
@@ -63,16 +87,62 @@ function coerceLife(v: unknown): Life {
 }
 
 /**
- * Accepts a profile from the browser. Heritage and skin are free text that goes
- * into a model prompt, so they are length-capped — the quiz only ever sends one
- * of the fixed labels, and anything longer is not a real customer.
+ * Builds a profile from raw quiz answers.
+ *
+ * Shared by the browser (which sends it to /api/checkout, and uses it to show
+ * the compatibility teaser) and by nothing else — but it lives here so the
+ * teaser and the paid result are computed from an identical shape. A customer
+ * shown 91% before paying and 84% after would be right to feel cheated.
+ */
+export function profileOf(a: Answers, l: Life): Profile {
+  return {
+    heritage: heritageOf(a),
+    skin: skinOf(a),
+    life: l,
+    concerns: concernsOf(a),
+    tone: toneOf(a),
+    gender: genderOf(a),
+    level: levelOf(a),
+  };
+}
+
+/** An index the browser sent, or null if it is not one of ours. */
+function coerceIndex(v: unknown, table: readonly string[]): number | null {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < table.length ? v : null;
+}
+
+function coerceIndexList(v: unknown, table: readonly string[]): number[] {
+  if (!Array.isArray(v)) return [];
+  const seen = new Set<number>();
+  for (const x of v) {
+    const i = coerceIndex(x, table);
+    if (i !== null) seen.add(i);
+  }
+  return [...seen].sort((a, b) => a - b);
+}
+
+/**
+ * Accepts a profile from the browser.
+ *
+ * Heritage and skin must be one of the quiz's own options rather than merely
+ * short strings. Everything here is handed to a model, and "is this one of nine
+ * known values" is a far stronger guarantee than "is this under 80 characters".
  */
 export function parseProfile(v: unknown): Profile | null {
   if (typeof v !== 'object' || v === null) return null;
   const o = v as Record<string, unknown>;
+
   const heritage = typeof o.heritage === 'string' ? o.heritage.trim() : '';
   const skin = typeof o.skin === 'string' ? o.skin.trim() : '';
-  if (!heritage || !skin) return null;
-  if (heritage.length > 80 || skin.length > 80) return null;
-  return { heritage, skin, life: coerceLife(o.life) };
+  if (!HO.includes(heritage) || !SO.includes(skin)) return null;
+
+  return {
+    heritage,
+    skin,
+    life: coerceLife(o.life),
+    concerns: coerceIndexList(o.concerns, CONCERN_LABELS),
+    tone: coerceIndex(o.tone, TONE_LABELS),
+    gender: coerceIndex(o.gender, GENDER_LABELS),
+    level: coerceIndex(o.level, LEVEL_LABELS),
+  };
 }

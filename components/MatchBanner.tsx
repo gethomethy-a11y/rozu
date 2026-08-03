@@ -2,7 +2,7 @@
 
 import { IC, Raw } from '@/lib/icons';
 
-export function MatchBanner({ h1, h2, subtitle }: { h1: string; h2: string; subtitle: string }) {
+export function MatchBanner({ h1, h2, subtitle, pct }: { h1: string; h2: string; subtitle: string; pct: number }) {
   return (
     <div className="mbanner">
       <div className="mb-ics">
@@ -18,7 +18,7 @@ export function MatchBanner({ h1, h2, subtitle }: { h1: string; h2: string; subt
         <div className="mb-s">{subtitle}</div>
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-        <div className="mb-n">87%</div>
+        <div className="mb-n">{`${pct}%`}</div>
         <div className="mb-l">Match</div>
       </div>
     </div>

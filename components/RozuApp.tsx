@@ -1,11 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { profileOf } from '@/lib/order';
 import {
   QS,
   emptyLife,
-  heritageOf,
-  skinOf,
   type Answers,
   type Filling,
   type Life,
@@ -53,6 +52,13 @@ const PAID_POLL_MS = 1500;
 const PAID_DEADLINE_MS = 120000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Computed server-side, where both full profiles live. */
+export type CoupleInfo = {
+  match: { pct: number; reason: string };
+  sharedConcerns: string[];
+  sharedLife: ('sleep' | 'stress' | 'diet')[];
+};
 
 type Draft = {
   t: number;
@@ -106,9 +112,10 @@ export function RozuApp() {
   const [resultPhase, setResultPhase] = useState<ResultPhase>('preview');
   const [aiMsg, setAiMsg] = useState(AI_MSGS[0]);
 
-  const [routine, setRoutine] = useState<{ p: Routine | null; h: string; s: string; pp: Routine | null; ph: string; ps: string }>({
-    p: null, h: '', s: '', pp: null, ph: '', ps: '',
-  });
+  const [routine, setRoutine] = useState<{
+    p: Routine | null; h: string; s: string; pp: Routine | null; ph: string; ps: string;
+    couple: CoupleInfo | null;
+  }>({ p: null, h: '', s: '', pp: null, ph: '', ps: '', couple: null });
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [toastState, setToastState] = useState<{ show: boolean; msg: string; ok: boolean }>({ show: false, msg: '', ok: true });
@@ -295,6 +302,7 @@ export function RozuApp() {
           partner: Routine | null;
           plan: Plan;
           profile: { self: { heritage: string; skin: string }; partner: { heritage: string; skin: string } | null };
+          couple: CoupleInfo | null;
         };
 
         /* After a redirect the quiz state is gone, so the labels the result
@@ -308,6 +316,7 @@ export function RozuApp() {
           pp: d.partner,
           ph: d.profile.partner?.heritage ?? '',
           ps: d.profile.partner?.skin ?? '',
+          couple: d.couple ?? null,
         });
         setResultPhase('full');
       } catch (e) {
@@ -419,8 +428,8 @@ export function RozuApp() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           plan,
-          self: { heritage: heritageOf(selfAns), skin: skinOf(selfAns), life: selfLife },
-          partner: plan === 'couple' ? { heritage: heritageOf(partAns), skin: skinOf(partAns), life: partLife } : null,
+          self: profileOf(selfAns, selfLife),
+          partner: plan === 'couple' ? profileOf(partAns, partLife) : null,
           utm,
           ...(preview ? { preview } : {}),
         }),
@@ -532,7 +541,7 @@ export function RozuApp() {
     setSelfLife(emptyLife());
     setPartLife(emptyLife());
     setResultPhase('preview');
-    setRoutine({ p: null, h: '', s: '', pp: null, ph: '', ps: '' });
+    setRoutine({ p: null, h: '', s: '', pp: null, ph: '', ps: '', couple: null });
     show('landing');
   }, [show]);
 
@@ -599,6 +608,8 @@ export function RozuApp() {
               bothDone={bothDone}
               selfAns={selfAns}
               partAns={partAns}
+              selfLife={selfLife}
+              partLife={partLife}
               onPurchase={doPurchase}
             />
           )}
@@ -632,6 +643,7 @@ export function RozuApp() {
               pp={routine.pp}
               ph={routine.ph}
               ps={routine.ps}
+              couple={routine.couple}
               onOpenSheet={() => setSheetOpen(true)}
               onCopy={() => copyText(routineText(share), 'Routine copied')}
             />

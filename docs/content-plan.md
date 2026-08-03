@@ -1,192 +1,220 @@
 # RŌZU — Content-Plan
 
+Für dich geschrieben, nicht für Marketing-Leute. Wenn irgendwo ein Wort steht,
+das dir nichts sagt, ist das mein Fehler — sag Bescheid.
+
+---
+
+## Worum es eigentlich geht
+
+Du willst, dass jemand auf TikTok stehen bleibt, dein Video zu Ende schaut, auf
+deinen Link tippt und 9 Dollar bezahlt.
+
+Das ist eine lange Kette, und sie reißt fast immer an derselben Stelle: **in den
+ersten zwei Sekunden.** Wenn jemand in dieser Zeit nicht versteht, worum es
+geht, ist er weg. Alles andere — Schnitt, Musik, Licht — ist nachrangig.
+
+Deshalb dreht sich der ganze Plan um genau eine Frage: **Was sagst du in den
+ersten zwei Sekunden?**
+
+---
+
+## Wie TikTok entscheidet, ob dein Video läuft
+
+Kurz und ohne Fachwörter:
+
+1. TikTok zeigt dein Video ein paar hundert Leuten.
+2. Es misst vor allem eines: **wie lange sie zuschauen.**
+3. Schauen sie bis zum Ende oder nochmal von vorn, zeigt TikTok es mehr Leuten.
+4. Wischen sie nach zwei Sekunden weg, ist es vorbei.
+
+**Wichtig:** Likes sind fast egal. Was zählt, ist die Zuschauzeit. Ein Video mit
+30 Likes, das alle zu Ende schauen, läuft besser als eines mit 300 Likes, das
+alle nach drei Sekunden wegwischen.
+
+Deshalb: **kurze Videos.** 15 bis 25 Sekunden. Kurz heißt, mehr Leute schauen zu
+Ende, und das ist genau das, was TikTok belohnt.
+
+---
+
+## Die eine Regel für den Anfang
+
+In den ersten zwei Sekunden müssen **drei Dinge dasselbe sagen**:
+
+| | |
+|---|---|
+| Was du **sagst** | „LSF 50 ist für deine Haut die falsche Antwort." |
+| Was man **sieht** | Du hältst eine Sonnencreme in die Kamera |
+| Was **geschrieben** steht | „LSF 50 ist falsch für dich" |
+
+Wenn diese drei auseinanderlaufen, muss das Gehirn sortieren — und in der
+Zeit ist der Daumen schon weiter. Das klingt banal, ist aber der häufigste
+Grund, warum gute Videos nicht laufen.
+
+Der geschriebene Text gehört **ins obere Drittel**. Unten liegen die
+TikTok-Buttons drüber, und rechts der Kommentar-Bereich.
+
+---
+
+## Drei Sorten Videos, mehr brauchst du nicht
+
+### Sorte 1 — Du erklärst etwas Überraschendes
+
+Du redest in die Kamera. Kein Schnitt, kein Aufwand. Handy anlehnen, los.
+
+Das Muster ist immer gleich:
+
 ```
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-CONTENT STRATEGY OVERVIEW
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-CORE THEME:       "Deine Hautpflege wurde für jemand anderen gemacht."
-                  Ein einziger Gedanke, den jedes Video bedient: die Regeln,
-                  die du befolgst, stammen aus Studien an einer Haut, die
-                  nicht deine ist.
-
-PILLAR MIX:       Pillar 1 in jedem Hook (ein Thema, eine Frage)
-                  Pillar 2 in jedem Intro (Spoken = Visual = Text)
-                  Pillar 3 trägt die Serie "Was gilt für dich nicht"
-                  Pillar 4 trägt die Karten-Formate (bewährte Strukturen)
-
-FORMAT MIX:       40 % Talking-Head-UGC (Telefon, ungeschnitten, du oder ihr)
-                  25 % Karten-Reveal (die Share-Card ist der Payoff)
-                  20 % Split-Screen-Vergleich (zwei Herkünfte, zwei Routinen)
-                  15 % Duett-/Stitch-Köder (Paare vergleichen ihre Zahl)
-
-REPURPOSE SIGNAL: Vier Hook-Strukturen, die in Skincare seit Jahren tragen:
-                  "Stop doing X if you have Y"
-                  "POV: you've been doing X wrong your whole life"
-                  "X vs Y" als harter Split
-                  "I tested X so you don't have to"
-                  Wir remixen die STRUKTUR, nicht den Inhalt.
-━━━━━━━━━━━━━━━━━━━━━━━━━━
+Sekunde 0–2    Eine überraschende Behauptung oder Frage
+Sekunde 2–15   Warum das so ist. Ruhig, sachlich, kein Verkaufston.
+Sekunde 15–20  „Auf rozu.de findest du raus, was für deine Haut gilt."
 ```
 
----
+**Beispiel, wörtlich:**
 
-## Das eine Asset, das die Arbeit macht
+> „Warum ist LSF 50 für deine Haut wahrscheinlich die falsche Antwort?
+>
+> Melanin ist ein natürlicher Sonnenschutz. Je mehr du davon hast, desto mehr
+> bringt deine Haut schon selbst mit. Auf öliger Haut verstopft LSF 50
+> zusätzlich die Poren — LSF 30 tut das nicht. Es gibt eine Ausnahme, und das
+> ist sehr helle nordeuropäische Haut. Da ist 50+ tatsächlich richtig.
+>
+> Was für dich gilt, findest du in zwei Minuten raus. Link ist in der Bio."
 
-Alles hängt an der **Share-Card**. Sie ist das Einzige im Produkt, das jemand
-freiwillig postet, und sie trägt ihren eigenen Kontext — beide Herkünfte, die
-Zahl, das Wortzeichen. Jedes Video sollte darauf zulaufen.
+Fünf weitere Themen im gleichen Muster:
 
-Für Paare ist die Zahl der Motor: **„Wir sind nur zu 66 % hautkompatibel"** ist
-ein Satz, den Leute in die Kamera sagen wollen. Niedrige Zahlen funktionieren
-dabei besser als hohe — Konflikt schlägt Harmonie im Feed.
+- **„An welcher Haut wurde dein Serum eigentlich getestet?"** — Hautforschung
+  lief lange überwiegend an hellerer Haut. Deshalb gibt es zu dunklen Flecken
+  nach einem Pickel weniger gute Empfehlungen als zum Pickel selbst.
+- **„Warum reagiert dieselbe Creme bei deiner Freundin ganz anders?"** —
+  Unterschiedlich dicke Hautbarriere. Was bei ihr nichts macht, brennt bei dir.
+- **„Warum brichst du nach Milchprodukten aus und deine Freundin nicht?"** —
+  Der Zusammenhang ist nicht bei allen gleich stark.
+- **„Was verkauft RŌZU dir absichtlich nicht?"** — Keine Produkte, kein Abo,
+  keine Marke, an der wir mitverdienen. Nur die Reihenfolge und die Wirkstoffe.
+  Das Video läuft langsamer an, aber Leute kaufen danach eher.
+- **„Von elf Produkten auf vier."** — Du zeigst dein Badregal vorher und
+  nachher. Nicht deine Haut. Nur die Produkte.
 
----
+### Sorte 2 — Ihr zu zweit (das ist das Wichtigste)
 
-## VIDEO IDEAS
+Das hier ist dein bestes Format, und der Grund ist einfach: **eine Zahl über
+sich selbst zu erfahren, ist etwas, das Leute teilen.** „Wir sind nur zu 66 %
+hautkompatibel" ist ein Satz, den Paare in die Kamera sagen wollen.
 
-Jede Idee ist fertig zum Drehen. Hook nach Pillar 1: ein Thema, eine Frage.
+**Niedrige Zahlen funktionieren besser als hohe.** 91 % ist langweilig, 34 %
+ist ein Video.
 
-### Block A — Herkunft als Aufhänger (TikTok, Instagram)
+**So drehst du es:**
 
-**[1] Der SPF-Widerspruch** — Talking Head — Pillar 1 + 3
-Hook: *„Warum ist LSF 50 für deine Haut die falsche Antwort?"*
-Body: Melanin liefert natürlichen Schutz. Auf öliger Haut verstopft LSF 50, was
-LSF 30 nicht tut. Die Ausnahme ist nordeuropäische Haut — dort ist 50+ richtig.
-Reveal: Karte mit „SPF 30 — matched to your melanin".
+```
+Sekunde 0–3    Ihr beide, Handy zwischen euch, Ergebnis noch verdeckt.
+               „Wir haben testen lassen, wie kompatibel unsere Haut ist."
+Sekunde 3–12   Kurz vergleichen. „Du schläfst um zwei, ich um elf."
+Sekunde 12–20  Aufdecken. Eure echte Reaktion drin lassen.
+```
 
-**[2] Die Studien-Frage** — Talking Head, ernst — Pillar 1
-Hook: *„An welcher Haut wurde dein Serum eigentlich getestet?"*
-Body: Ein Großteil der Dermatologie-Forschung lief lange an hellerer Haut.
-Deshalb gibt es für Hyperpigmentierung nach einem Pickel weniger belastbare
-Empfehlungen als für den Pickel selbst.
-Reveal: Quiz-Frage 2 auf dem Bildschirm.
+**Die Reaktion ist das Video, nicht die Zahl.** Nicht nachdrehen, nicht
+nachsprechen. Wenn einer von euch lacht oder flucht, ist genau das der Teil,
+der läuft.
 
-**[3] Barriere-Dicke** — Extreme Makro / Split — Pillar 2 + 3
-Hook: *„Zwei Gesichter, dieselbe Creme, zwei völlig verschiedene Reaktionen."*
-Visual: harter Split, links Rötung, rechts nichts.
-Body: Dünnere Hornschicht reagiert auf Säuren, die andere Haut problemlos
-verträgt. Gleiche Creme, anderes Ergebnis, keine Einbildung.
+Weitere Varianten aus derselben Aufnahme:
 
-**[4] Die Milch-Sache** — Talking Head — Pillar 1
-Hook: *„Warum bricht deine Haut nach Milch aus — und die deiner Freundin nicht?"*
-Body: Der Zusammenhang zwischen Milchprodukten und Talgproduktion ist nicht bei
-allen gleich stark. RŌZU fragt genau das ab.
+- **„Ratet unsere Zahl — Auflösung morgen."** Kommentare raten. Zwei Videos aus
+  einer Aufnahme, und die Kommentare zählen als Interaktion.
+- **„Postet eure Zahl. Wir fangen an: 66 %."** Unter zehn Sekunden. Der einzige
+  Zweck ist, dass andere antworten.
+- **„Warum ihr euch die Feuchtigkeitscreme nicht teilen dürft."** Zwei
+  Hauttypen, ein Badregal.
 
-### Block B — Paar-Content (der virale Motor)
+### Sorte 3 — Du zeigst einfach das Produkt
 
-**[5] Die Zahl** — ihr beide, ein Telefon — Pillar 1 + 3
-Hook: *„Wir haben testen lassen, wie kompatibel unsere Haut ist."*
-Visual: Handy zwischen euch, Zahl noch verdeckt.
-Body: kurz die Antworten vergleichen — er schläft um 2, sie um 23 Uhr.
-Reveal: Zahl aufdecken. **Reaktion ungeschnitten lassen.** Die Reaktion ist das
-Video, nicht die Zahl.
+Bildschirmaufnahme vom Handy, schnell durchgeklickt.
 
-**[6] Der Regal-Streit** — Split — Pillar 3
-Hook: *„Warum ihr euch die Feuchtigkeitscreme nicht teilen dürft."*
-Body: Zwei Hauttypen, eine Badablage. Was geteilt werden kann und was nicht.
-Reveal: „Where you differ"-Abschnitt aus dem Produkt.
+> „Sieben Fragen, dann weißt du, was deine Haut wirklich braucht."
 
-**[7] Duett-Köder** — direkt in die Kamera — Pillar 4
-Hook: *„Postet eure Zahl. Wir fangen an: 66 %."*
-Ein Satz, unter zehn Sekunden. Der ganze Zweck ist die Antwort-Welle.
-
-**[8] Rate die Zahl** — Pillar 3
-Hook: *„Rate, wie kompatibel unsere Haut ist — Auflösung am Ende."*
-Kommentare raten, Antwort im nächsten Video. Zwei Videos aus einer Aufnahme.
-
-### Block C — Produkt zeigen (Conversion)
-
-**[9] Sieben Fragen** — Screen-Recording, schnell — Pillar 2
-Hook: *„Sieben Fragen. Dann weißt du, was deine Haut tatsächlich braucht."*
-Body: Quiz im Zeitraffer, echte Antworten.
-Reveal: fertige Routine. Preis nennen: $9.
-
-**[10] Was NICHT drin ist** — Talking Head — Pillar 3
-Hook: *„Was RŌZU dir absichtlich nicht verkauft."*
-Body: Keine Produkte, kein Abo, keine Marke, an der wir mitverdienen. Nur die
-Reihenfolge und die Wirkstoffe.
-Das ist der Vertrauens-Post. Läuft langsamer, konvertiert besser.
-
-**[11] Die Avoid-Liste** — Pillar 1
-Hook: *„Welche drei Dinge solltest du für deine Herkunft weglassen?"*
-Body: Drei nennen, für eine Herkunft. Nicht verallgemeinern.
-
-**[12] Vorher/Nachher der Routine** — kein Hautvergleich — Pillar 3
-Hook: *„Mein Badezimmerregal vorher und nachher — von elf Produkten auf vier."*
-Wichtig: **kein Haut-Vorher/Nachher.** Siehe Warnungen unten.
+Quiz im Zeitraffer, echte Antworten, am Ende die fertige Routine. Preis nennen.
+Wirkt nüchtern, konvertiert aber am besten von allen dreien.
 
 ---
 
-## Plattformen
+## Wie oft, und wann
 
-**TikTok — der Hauptkanal.** Blöcke A und B. 3–5 Posts pro Woche. Vertikal,
-Telefon, kein Schnitt-Feuerwerk. Untertitel immer, viele schauen ohne Ton.
+**Diese Woche, allein:**
+Dreh 4 bis 5 Videos aus Sorte 1. Poste sie noch nicht. Ein Nachmittag reicht —
+du kannst alle in einem Rutsch aufnehmen, weil du nur die Kamera anmachst und
+redest.
 
-**Instagram Reels — Zweitverwertung.** Dieselben Videos, ohne TikTok-Wasserzeichen
-(aus dem Entwurf exportieren, nicht aus TikTok herunterladen). Zusätzlich die
-Share-Card als statischer Post — sie ist 4:5 und dafür gebaut.
+**Wenn ihr zusammen seid:**
+Ein Nachmittag für Sorte 2. Fünf Videos aus einer Session sind realistisch, weil
+ihr das Quiz nur einmal ausfüllt und dann verschiedene Momente filmt.
 
-**LinkedIn — anderes Publikum, anderer Inhalt.** Kein Skincare-Content. Was dort
-funktioniert, ist der Bau selbst: „Ich habe ein Produkt gebaut, das
-Hautpflege nach Herkunft personalisiert — hier ist, was ich über
-Hautforschung gelernt habe." 1–2 Posts pro Woche, Text mit einem Bild.
-Verkauft wenig, öffnet Türen.
+**Dann:** Jeden Tag ein Video. Erst die von Sorte 1, dann die Paar-Videos
+dazwischen streuen.
 
----
-
-## Zeitplan
-
-**Diese Woche, bevor du bei deinem Freund bist**
-- Store-Aktivierung fertig machen (Ausweis). Ohne das kann niemand kaufen.
-- TikTok-Konto anlegen, Bio, Link.
-- TikTok Pixel anlegen, ID an mich — dann ist er live, bevor der erste Post geht.
-- Rechtstexte ausfüllen (die eckigen Klammern).
-- Testkauf machen.
-- 3–4 Videos aus Block A allein drehen, noch nicht posten.
-
-**Erste Woche zu zweit**
-- Block B an einem Nachmittag drehen. Fünf Paar-Videos aus einer Session.
-- Ab jetzt täglich posten. Erst Block A, dann B dazwischen.
-- Noch kein bezahltes Budget.
-
-**Zweite Woche**
-- Ansehen, welches Video die längste Wiedergabezeit hat — nicht welches die
-  meisten Likes hat.
-- Erst dann Geld hinter genau dieses eine Video legen, nicht vorher.
+**Zwei Wochen später:** Schau nach, welches Video die **längste Zuschauzeit**
+hat — nicht die meisten Likes. Erst dann Geld hinter genau dieses eine legen.
 
 ---
 
-## Drei Warnungen, die ich für wichtiger halte als jede Hook-Idee
+## Wo du was postest
 
-**1. Herkunft ist Identität, kein Kostüm.**
-Der Grat zwischen „deine Haut hat andere Bedürfnisse" und einem Klischee ist
-schmal, und auf der falschen Seite steht ein Shitstorm, der eine Marke in dieser
-Nische dauerhaft erledigt. Regeln: immer über **Biologie** sprechen — Melanin,
-Hornschicht, Talg — nie über Kultur oder Aussehen. Nie Akzent, Kleidung oder
-Ethnie nachstellen. Keine Person einer anderen Herkunft spielen. Wenn ein Video
-funktionieren würde, weil es Herkunft niedlich macht, nicht posten.
+**TikTok** ist dein Hauptkanal. Alles landet hier zuerst.
 
-**2. Kein Haut-Vorher/Nachher.**
-Ihr verkauft eine Routine, keine Heilung. Ein Vorher/Nachher-Foto ist eine
-Wirkversprechung, und bei Kosmetik in der EU ist das ein rechtliches Problem
-(HWG, UWG) — unabhängig davon, ob es stimmt. Zeigt stattdessen das Regal, die
-Routine, die Karte.
+**Instagram Reels** bekommt dieselben Videos noch einmal. Wichtig: exportiere
+sie aus deinem Entwurf, **nicht** aus TikTok herunterladen — sonst ist das
+TikTok-Wasserzeichen drauf, und Instagram zeigt solche Videos weniger. Dazu
+kannst du die Share-Card als normales Bild posten, sie hat schon das richtige
+Format.
 
-**3. Postet nicht, bevor der Kauf funktioniert.**
-Der erste Post ist der einzige, der ohne Werbebudget Reichweite bekommt. Wenn er
-läuft, während der Store noch auf `pending` steht, siehst du den Traffic auf dem
-Zähler und kein Geld auf dem Konto — und die Reichweite kommt nicht zurück.
-Erst Testkauf, dann posten.
+**LinkedIn** ist ein völlig anderes Publikum. Dort funktioniert kein
+Skincare-Content. Was dort funktioniert, ist die Geschichte dahinter: „Ich habe
+ein Produkt gebaut, das Hautpflege nach Herkunft personalisiert — das habe ich
+über Hautforschung gelernt." Ein bis zwei Textposts pro Woche. Bringt kaum
+Verkäufe, aber Kontakte.
 
 ---
 
-## Wenn ihr mit KI-Video arbeiten wollt
+## Drei Dinge, die du nicht machen solltest
 
-Das Skill nennt dafür Arcads mit **Sora 2 Pro** als Standard, **Kling 3.0** wenn
-eine exakte 12- oder 15-Sekunden-Timeline nötig ist, und **Vidu 3.1** als
-gesperrt (zu filmisch für UGC). Wortlimit hart: **45–55 Wörter für 15 Sekunden**,
-36–44 für 12. Darüber schneidet die Vertonung ab.
+Die sind mir wichtiger als jede Video-Idee.
 
-Meine Empfehlung für den Start trotzdem: **echt drehen.** Ihr seid zu zweit, das
-Paar-Format lebt von der ungespielten Reaktion beim Aufdecken der Zahl, und
-genau das ist das, was KI-Avatare nicht können.
+**1. Rede über Biologie, nicht über Kultur.**
+
+Der Unterschied ist entscheidend:
+
+| Geht | Geht nicht |
+|---|---|
+| „Mehr Melanin heißt mehr Risiko für dunkle Flecken" | „Asiatische Frauen machen das so" |
+| „Dünnere Hautbarriere reagiert schneller" | Akzent, Kleidung oder Aussehen nachstellen |
+| „Bei diesem Hauttyp verstopft LSF 50" | Eine Person einer anderen Herkunft spielen |
+
+Herkunft ist Identität, kein Kostüm. In dieser Nische erledigt ein einziger
+Fehltritt die Marke dauerhaft — und zwar zu Recht. Faustregel: **Wenn ein Video
+nur funktioniert, weil es Herkunft niedlich oder witzig macht, poste es nicht.**
+
+**2. Keine Vorher/Nachher-Bilder von Haut.**
+
+Du verkaufst eine Routine, keine Heilung. Ein Hautfoto vorher und nachher ist
+ein Wirkversprechen, und das ist bei Kosmetik in der EU ein rechtliches Problem
+— unabhängig davon, ob es stimmt. Zeig stattdessen dein Regal, die Routine oder
+die Karte.
+
+**3. Poste nicht, bevor der Kauf funktioniert.**
+
+Dein allererster Post ist der einzige, der ohne Werbebudget von allein Reichweite
+bekommt. Wenn der läuft, während dein Lemon-Squeezy-Store noch nicht freigegeben
+ist, siehst du die Klicks und bekommst kein Geld — und diese Reichweite kommt
+nicht wieder.
+
+Also: **erst Testkauf, dann posten.**
+
+---
+
+## Deine Reihenfolge, ganz konkret
+
+1. Ausweis bei Lemon Squeezy hochladen, damit der Store freigegeben wird
+2. TikTok Pixel anlegen, die Nummer mir schicken
+3. Testkauf machen
+4. 4–5 Videos aus Sorte 1 drehen
+5. Erst dann den ersten Post

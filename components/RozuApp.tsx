@@ -58,6 +58,15 @@ export type CoupleInfo = {
   match: { pct: number; reason: string };
   sharedConcerns: string[];
   sharedLife: ('sleep' | 'stress' | 'diet')[];
+  /** Only what their answers support — see lib/match.ts. */
+  facts: {
+    concerns: string[];
+    habits: { key: 'sleep' | 'stress' | 'diet'; answer: string }[];
+    skinSame: boolean;
+    selfSkin: string;
+    partnerSkin: string;
+    heritageSame: boolean;
+  };
 };
 
 type Draft = {

@@ -92,13 +92,39 @@ function ProfileCard({ h, s, p }: { h: string; s: string; p: Routine }) {
   );
 }
 
-function SharedCard({ icon, title, desc, diff }: { icon: string; title: string; desc: string; diff?: React.ReactNode }) {
+/* One card per lifestyle answer the two of them gave identically. The title
+   quotes the answer back rather than asserting a habit — the old card said
+   "Sleep before midnight" to couples who had both answered "after 1am". */
+const HABIT_IC: Record<'sleep' | 'stress' | 'diet', string> = {
+  sleep: IC.sleep(16),
+  stress: IC.stress(16),
+  diet: IC.diet(16),
+};
+const HABIT_BG: Record<'sleep' | 'stress' | 'diet', string> = {
+  sleep: '#e8ecfa',
+  stress: '#f7eef3',
+  diet: '#e8f7ee',
+};
+const HABIT_TITLE: Record<'sleep' | 'stress' | 'diet', (answer: string) => string> = {
+  sleep: (a) => `You both sleep: ${a.toLowerCase()}`,
+  stress: (a) => `Same stress level: ${a.toLowerCase()}`,
+  diet: (a) => `You eat the same way: ${a.toLowerCase()}`,
+};
+const HABIT_DESC: Record<'sleep' | 'stress' | 'diet', string> = {
+  sleep: 'Cortisol is working on both of you. This is the one worth fixing together.',
+  stress: 'It shows up differently on each of your skin types — same cause, two effects.',
+  diet: 'Whatever you cook, you are both eating it. Change it once, it counts twice.',
+};
+
+function SharedCard({
+  icon, title, desc, diff, badge = 'Shared',
+}: { icon: string; title: string; desc: string; diff?: React.ReactNode; badge?: string }) {
   return (
     <div className="shared">
       <div className="sh-top">
         <Raw html={icon} />
         <span className="sh-t">{title}</span>
-        <span className="sh-badge">Shared</span>
+        <span className="sh-badge">{badge}</span>
       </div>
       <div className="sh-d">{desc}</div>
       {diff ? <div className="sh-diff">{diff}</div> : null}
@@ -185,27 +211,66 @@ export function Result({
         </div>
 
         <div className={'panel' + (tab === 'panelTogether' ? ' active' : '')} id="panelTogether">
-          <SectionHead label="Shared habits" />
+          <SectionHead label="What you actually share" />
+          {/* SPF is always shareable as a habit, and the two values come from
+              the routines themselves, so this card was already honest. */}
           <SharedCard
             icon={box(30, 9, '#fdf3e0', IC.spf(16))}
             title="Morning SPF — both, always"
-            desc="Same habit, different products."
+            desc={p.spf === pp.spf ? 'Same habit, same level — the easy one to share.' : 'Same habit, different products.'}
             diff={
               <>
                 <b>You:</b> {p.spf} · <b>Partner:</b> {pp.spf}
               </>
             }
           />
-          <SharedCard
-            icon={box(30, 9, '#e8ecfa', IC.sleep(16))}
-            title="Sleep before midnight"
-            desc="Cortisol hits both skin types — same fix, different reasons."
-          />
-          <SharedCard
-            icon={box(30, 9, '#e6f0fa', IC.water(16))}
-            title="2L water daily"
-            desc="Dehydration affects both heritages the same way."
-          />
+          {(couple?.facts.concerns ?? []).slice(0, 2).map((c, i) => (
+            <SharedCard
+              key={c}
+              icon={box(30, 9, '#f7eef3', IC.darkspot(22))}
+              title={`You both deal with ${c.toLowerCase()}`}
+              desc="Different heritage, same target — so you can hold each other to it."
+              /* Only on the first: the key ingredients do not change per
+                 concern, and repeating the same line reads as a template. */
+              diff={
+                i === 0 ? (
+                  <>
+                    <b>You:</b> {p.key_ingredient} · <b>Partner:</b> {pp.key_ingredient}
+                  </>
+                ) : undefined
+              }
+            />
+          ))}
+          {(couple?.facts.habits ?? []).map((hb) => (
+            <SharedCard
+              key={hb.key}
+              icon={box(30, 9, HABIT_BG[hb.key], HABIT_IC[hb.key])}
+              title={HABIT_TITLE[hb.key](hb.answer)}
+              desc={HABIT_DESC[hb.key]}
+            />
+          ))}
+          {/* Nothing shared at all is a real outcome, not an empty state to
+              hide: two people with no overlap still bought a couple plan. */}
+          {couple && !couple.facts.concerns.length && !couple.facts.habits.length && (
+            <SharedCard
+              icon={box(30, 9, '#f4f1f3', IC.hearts(20))}
+              title="You share the habit, not the products"
+              desc="Nothing in your answers overlaps — different concerns, different routines, different sleep. The one thing you can do together is show up daily."
+            />
+          )}
+
+          {!couple?.facts.skinSame && couple && (
+            <>
+              <SectionHead label="Where you differ" />
+              <SharedCard
+                icon={box(30, 9, '#e6f0fa', IC.drySkin(20))}
+                title={`${couple.facts.selfSkin} vs ${couple.facts.partnerSkin}`}
+                desc="Do not share a moisturiser. Almost everything else, you can."
+                badge="Different"
+              />
+            </>
+          )}
+
           <SectionHead label="Heritage insights" />
           <div className="hcard">
             <div className="hcard-ic">

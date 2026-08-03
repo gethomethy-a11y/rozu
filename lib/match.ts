@@ -13,7 +13,7 @@
  * they are 34% compatible with their partner, and a perfect score reads as a
  * gimmick rather than a measurement.
  */
-import { CONCERN_LABELS, type Life } from './quiz';
+import { CONCERN_LABELS, DIET_OPTS, SLEEP_OPTS, STRESS_OPTS, type Life } from './quiz';
 import type { Profile } from './order';
 
 export type Match = { pct: number; reason: string };
@@ -103,4 +103,39 @@ function reasonFor(
     return `Opposite skin types — same habits, different products`;
   }
   return `Two heritages, one shared set of habits`;
+}
+
+/* ── What the Together tab is allowed to claim ───────────────────────────── */
+/* The tab shipped with three fixed cards: "Sleep before midnight", "2L water
+   daily", "Morning SPF". Two of the three were assertions about the couple that
+   nothing had checked — shown unchanged to two people who both go to bed at
+   2am. This returns only what their answers actually support, so a card can
+   never claim a habit they do not have. */
+
+export type TogetherFacts = {
+  /** Concern labels both partners selected. */
+  concerns: string[];
+  /** Lifestyle answers they gave identically, with the answer itself. */
+  habits: { key: keyof Life; answer: string }[];
+  skinSame: boolean;
+  selfSkin: string;
+  partnerSkin: string;
+  heritageSame: boolean;
+};
+
+const LIFE_OPTS: Record<keyof Life, string[]> = {
+  sleep: SLEEP_OPTS,
+  stress: STRESS_OPTS,
+  diet: DIET_OPTS,
+};
+
+export function togetherFacts(a: Profile, b: Profile): TogetherFacts {
+  return {
+    concerns: sharedConcerns(a, b),
+    habits: sharedLife(a, b).map((k) => ({ key: k, answer: LIFE_OPTS[k][a.life[k] as number] ?? '' })),
+    skinSame: a.skin === b.skin,
+    selfSkin: a.skin,
+    partnerSkin: b.skin,
+    heritageSame: a.heritage === b.heritage,
+  };
 }

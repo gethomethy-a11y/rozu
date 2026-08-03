@@ -12,7 +12,7 @@ import {
   type OrderRecord,
   type Profile,
 } from '@/lib/order';
-import { matchOf, sharedConcerns, sharedLife } from '@/lib/match';
+import { matchOf, sharedConcerns, sharedLife, togetherFacts } from '@/lib/match';
 import { verifyPaidToken } from '@/lib/paidToken';
 import { buildPrompt } from '@/lib/prompt';
 import { ROUTINE_SCHEMA, validateRoutine } from '@/lib/validate';
@@ -114,6 +114,7 @@ export async function POST(req: Request) {
           match: matchOf(record.self, record.partner),
           sharedConcerns: sharedConcerns(record.self, record.partner),
           sharedLife: sharedLife(record.self, record.partner),
+          facts: togetherFacts(record.self, record.partner),
         }
       : null;
 

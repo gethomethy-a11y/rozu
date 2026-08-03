@@ -5,48 +5,40 @@ export const metadata: Metadata = { title: 'Impressum — RŌZU', robots: { inde
 
 /* Angaben gemäß § 5 DDG (früher § 5 TMG).
  *
- * Die Platzhalter MÜSSEN durch echte Daten ersetzt werden, bevor die Seite live
- * geht. Ein Impressum mit Platzhaltern ist schlechter als keines: es ist
- * nachweisbar falsch. Ich trage hier nichts ein, was ich nicht sicher weiß. */
+ * § 18 Abs. 2 MStV ist bewusst nicht aufgeführt: der verlangt einen
+ * Verantwortlichen für journalistisch-redaktionelle Inhalte, und die gibt es
+ * hier nicht. Eine Angabe zu machen, die auf das Angebot nicht zutrifft, ist
+ * keine zusätzliche Sicherheit. */
 export default function Impressum() {
   return (
     <LegalPage title="Impressum" updated="August 2026">
-      <div className="legal-todo">
-        <b>Vor dem Launch ausfüllen.</b> Alles in eckigen Klammern muss durch deine
-        echten Daten ersetzt werden. Eine ladungsfähige Anschrift ist Pflicht — ein
-        Postfach genügt nicht.
-      </div>
-
       <h2>Angaben gemäß § 5 DDG</h2>
       <p>
-        [VORNAME NACHNAME]
+        Lucia Mörner
         <br />
-        [STRASSE UND HAUSNUMMER]
+        Tengstraße 4
         <br />
-        [PLZ] [ORT]
+        80798 München
         <br />
         Deutschland
       </p>
 
       <h2>Kontakt</h2>
       <p>
-        E-Mail: [DEINE E-MAIL-ADRESSE]
-        <br />
-        Telefon: [DEINE TELEFONNUMMER]
+        E-Mail: <a href="mailto:gethomethy@gmail.com">gethomethy@gmail.com</a>
+      </p>
+      <p>
+        Anfragen per E-Mail werden in der Regel innerhalb von 24 Stunden beantwortet.
       </p>
 
       <h2>Umsatzsteuer</h2>
       <p>
-        [Wenn du eine USt-IdNr. hast: „Umsatzsteuer-Identifikationsnummer gemäß § 27 a
-        UStG: DE………". Wenn nicht, stattdessen: „Kleinunternehmer gemäß § 19 UStG, es
-        wird keine Umsatzsteuer ausgewiesen." Der Verkauf selbst läuft über Lemon
-        Squeezy als Merchant of Record — siehe <a href="/widerruf">Widerruf &amp;
-        Verkäufer</a>.]
+        Kleinunternehmerin gemäß § 19 UStG. Es wird keine Umsatzsteuer ausgewiesen.
       </p>
-
-      <h2>Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV</h2>
       <p>
-        [VORNAME NACHNAME], Anschrift wie oben.
+        Der Verkauf der RŌZU-Routinen selbst erfolgt über Lemon Squeezy als Merchant of
+        Record. Lemon Squeezy stellt die Rechnung aus und führt die jeweils anfallende
+        Umsatzsteuer ab. Näheres unter <a href="/widerruf">Widerruf &amp; Verkäufer</a>.
       </p>
 
       <h2>Verbraucherstreitbeilegung</h2>
@@ -55,13 +47,13 @@ export default function Impressum() {
         einer Verbraucherschlichtungsstelle teilzunehmen.
       </p>
 
-      <h2>Haftung für Inhalte</h2>
+      <h2>Hinweis zu den Inhalten</h2>
       <p>
         Die auf RŌZU erstellten Hautpflege-Routinen sind allgemeine kosmetische
-        Empfehlungen und <b>keine medizinische Beratung</b>. Sie ersetzen keine
-        Diagnose und keine Behandlung durch eine Ärztin oder einen Arzt. Bei
-        Hauterkrankungen, anhaltenden Beschwerden, Schwangerschaft oder bekannten
-        Allergien wende dich bitte an eine dermatologische Praxis.
+        Empfehlungen und <b>keine medizinische Beratung</b>. Sie ersetzen keine Diagnose
+        und keine Behandlung durch eine Ärztin oder einen Arzt. Bei Hauterkrankungen,
+        anhaltenden Beschwerden, in der Schwangerschaft oder bei bekannten Allergien
+        wende dich bitte an eine dermatologische Praxis.
       </p>
     </LegalPage>
   );

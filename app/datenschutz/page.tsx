@@ -13,16 +13,11 @@ export const metadata: Metadata = { title: 'Datenschutzerklärung — RŌZU', ro
 export default function Datenschutz() {
   return (
     <LegalPage title="Datenschutzerklärung" updated="August 2026">
-      <div className="legal-todo">
-        <b>Vor dem Launch ausfüllen.</b> Die eckigen Klammern ersetzen. Prüfe außerdem,
-        ob du bei Upstash und Anthropic einen Auftragsverarbeitungsvertrag abschließen
-        musst — beide bieten das an.
-      </div>
-
       <h2>1. Verantwortlicher</h2>
       <p>
-        [VORNAME NACHNAME], [STRASSE], [PLZ ORT], Deutschland. E-Mail:
-        [DEINE E-MAIL-ADRESSE]. Weitere Angaben im <a href="/impressum">Impressum</a>.
+        Lucia Mörner, Tengstraße 4, 80798 München, Deutschland. E-Mail:{' '}
+        <a href="mailto:gethomethy@gmail.com">gethomethy@gmail.com</a>. Weitere Angaben
+        im <a href="/impressum">Impressum</a>.
       </p>
 
       <h2>2. Was wir erheben, und warum</h2>
@@ -117,7 +112,8 @@ export default function Datenschutz() {
         Wirkung für die Zukunft widerrufen.
       </p>
       <p>
-        Schreib dafür an [DEINE E-MAIL-ADRESSE]. Da wir keine Kundenkonten führen, nenne
+        Schreib dafür an <a href="mailto:gethomethy@gmail.com">gethomethy@gmail.com</a>.
+        Da wir keine Kundenkonten führen, nenne
         bitte die Bestellnummer aus deiner Lemon-Squeezy-Rechnung, damit wir deine Daten
         zuordnen können.
       </p>

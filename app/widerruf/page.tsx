@@ -50,8 +50,9 @@ export default function Widerruf() {
 
       <h2>Kontakt zu uns</h2>
       <p>
-        Inhaltliche Fragen zur Routine beantworten wir gern: [DEINE E-MAIL-ADRESSE].
-        Vollständige Anbieterangaben im <a href="/impressum">Impressum</a>.
+        Inhaltliche Fragen zur Routine beantworten wir gern:{' '}
+        <a href="mailto:gethomethy@gmail.com">gethomethy@gmail.com</a>. Vollständige
+        Anbieterangaben im <a href="/impressum">Impressum</a>.
       </p>
     </LegalPage>
   );

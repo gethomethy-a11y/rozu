@@ -264,12 +264,19 @@ export function RozuApp() {
       const deadline = Date.now() + PAID_DEADLINE_MS;
       let paid: { token: string; plan: Plan } | null = null;
       let refunded = false;
+      /* A 5xx means the server is broken, not that the payment is still on its
+         way — waiting out the full two minutes would only make it look slow.
+         Tolerate a few in case it is a blip, then stop. */
+      let serverErrors = 0;
 
       for (;;) {
         try {
           const r = await fetch(`/api/paid?sid=${encodeURIComponent(sid)}`, { cache: 'no-store' });
           if (r.status === 404) break; // sid we never issued, or long expired
-          if (r.ok) {
+          if (r.status >= 500) {
+            if (++serverErrors >= 5) break;
+          } else if (r.ok) {
+            serverErrors = 0;
             const d = (await r.json()) as { status?: string; token?: string; plan?: Plan };
             if (d.status === 'paid' && d.token && d.plan) {
               paid = { token: d.token, plan: d.plan };

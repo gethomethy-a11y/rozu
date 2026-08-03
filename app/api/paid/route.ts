@@ -26,9 +26,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ status: record.status });
   }
 
-  return NextResponse.json({
-    status: 'paid',
-    plan: record.plan,
-    token: signPaidToken({ sid, plan: record.plan, orderId: record.orderId }),
-  });
+  /* Signing throws only when ROZU_TOKEN_SECRET is missing or too short — a
+     deployment mistake, not a customer problem. Say so with a 500 rather than
+     letting it surface as an unhandled crash: the browser distinguishes "not
+     paid yet, keep waiting" from "this is broken, stop waiting". */
+  let token: string;
+  try {
+    token = signPaidToken({ sid, plan: record.plan, orderId: record.orderId });
+  } catch (e) {
+    console.error('[paid] cannot issue token:', e instanceof Error ? e.message : e);
+    return NextResponse.json({ error: 'server misconfigured' }, { status: 500 });
+  }
+
+  return NextResponse.json({ status: 'paid', plan: record.plan, token });
 }

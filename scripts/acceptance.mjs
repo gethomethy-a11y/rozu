@@ -14,14 +14,15 @@ const ROOT = process.cwd();
 const TARGETS = ['.next/static', '.next/server'];
 const EXT = /\.(js|mjs|css|html|json|rsc|txt)$/;
 
-function walk(dir, out = []) {
+/** `ext` defaults to built-output files; the source scan passes its own. */
+function walk(dir, out = [], ext = EXT) {
   let entries;
   try { entries = readdirSync(dir); } catch { return out; }
   for (const e of entries) {
     const p = join(dir, e);
     const st = statSync(p);
-    if (st.isDirectory()) walk(p, out);
-    else if (EXT.test(e)) out.push(p);
+    if (st.isDirectory()) walk(p, out, ext);
+    else if (ext.test(e)) out.push(p);
   }
   return out;
 }
@@ -87,18 +88,55 @@ if (vendor.length) {
 }
 
 /* ── 2. SKIN-TONE HEXES ─────────────────────────────────── */
-// The swatches live in lib/quiz.ts, which is bundled into the page chunk.
-// Both the client chunk and its server-render counterpart are the same module.
-const QUIZ_CHUNK = /\.next\/(static\/chunks\/app\/page-[a-f0-9]+\.js|server\/app\/page\.js)$/;
+/* The rule: skin-tone colours exist for the six swatches in quiz question 3 and
+ * nowhere else — never to tint a card, a background or an icon by skin tone.
+ *
+ * Checked at the SOURCE, not in the built output. Which bundle a module lands
+ * in is the bundler's business and changes whenever an import moves; lib/quiz.ts
+ * is now pulled into the server chunks too, because the API needs the answer
+ * labels. That says nothing about how the colours are used. What matters is
+ * that they are written down once, inside one question.
+ *
+ * The build is still checked for one thing a source scan cannot see: a hex
+ * reaching a stylesheet, which would mean it had become a design colour.
+ */
+const SRC_DIRS = ['app', 'components', 'lib'];
+const SRC_EXT = /\.(ts|tsx|js|jsx|css)$/;
+const OWNER = 'lib/quiz.ts';
 
 console.log('\n=== 2. Skin-tone hex values ===');
-for (const hex of SKINTONE_HEXES) {
-  const rel = files
-    .filter((f) => readFileSync(f, 'utf8').toLowerCase().includes(hex))
+{
+  const uniq = [...new Set(SRC_DIRS.flatMap((d) => walk(join(ROOT, d), [], SRC_EXT)))];
+  if (uniq.length < 20) {
+    fail = 1;
+    console.log(`  FAIL scanned only ${uniq.length} source files — the scan itself is broken`);
+  }
+
+  for (const hex of SKINTONE_HEXES) {
+    const inSrc = uniq.filter((f) => readFileSync(f, 'utf8').toLowerCase().includes(hex)).map((f) => relative(ROOT, f));
+    const stray = inSrc.filter((r) => r !== OWNER);
+    if (stray.length) { fail = 1; console.log(`  FAIL ${hex} — used outside ${OWNER}: ${stray.join(', ')}`); }
+  }
+
+  // All six must sit inside the skintone question, not merely somewhere in quiz.ts.
+  const quiz = readFileSync(join(ROOT, OWNER), 'utf8');
+  const q3 = quiz.slice(quiz.indexOf("id: 'skintone'"), quiz.indexOf("id: 'skintype'"));
+  const outside = SKINTONE_HEXES.filter((h) => !q3.toLowerCase().includes(h));
+  if (outside.length) { fail = 1; console.log(`  FAIL not inside question 3: ${outside.join(', ')}`); }
+
+  const strayTotal = SKINTONE_HEXES.filter((hex) =>
+    uniq.some((f) => relative(ROOT, f) !== OWNER && readFileSync(f, 'utf8').toLowerCase().includes(hex)),
+  ).length;
+  if (!strayTotal && !outside.length) {
+    console.log(`  PASS — all 6 defined only in ${OWNER}, inside question 3, across ${uniq.length} source files`);
+  }
+
+  // A hex in CSS would mean a skin tone had become a design colour.
+  const cssHits = files
+    .filter((f) => f.endsWith('.css') && SKINTONE_HEXES.some((h) => readFileSync(f, 'utf8').toLowerCase().includes(h)))
     .map((f) => relative(ROOT, f));
-  const stray = rel.filter((r) => !QUIZ_CHUNK.test(r));
-  if (stray.length) { fail = 1; console.log(`  FAIL ${hex} — outside question 3: ${stray.join(', ')}`); }
-  else console.log(`  PASS ${hex}  ${rel.length} file(s), all question-3 swatch module: ${rel.join(', ')}`);
+  if (cssHits.length) { fail = 1; console.log(`  FAIL a skin-tone hex reached a stylesheet: ${cssHits.join(', ')}`); }
+  else console.log('  PASS — no skin-tone hex in any built stylesheet');
 }
 
 /* ── 3. SECRETS IN CLIENT BUNDLE ────────────────────────── */

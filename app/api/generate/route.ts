@@ -13,6 +13,7 @@ import {
   type Profile,
 } from '@/lib/order';
 import { matchOf, sharedConcerns, sharedLife, togetherFacts } from '@/lib/match';
+import { CONCERN_LABELS } from '@/lib/quiz';
 import { verifyPaidToken } from '@/lib/paidToken';
 import { buildPrompt } from '@/lib/prompt';
 import { ROUTINE_SCHEMA, validateRoutine } from '@/lib/validate';
@@ -101,9 +102,12 @@ export async function POST(req: Request) {
 
   /* The heritage/skin labels the result screen prints. They live on the order,
      not in the browser — after the payment redirect the client has only a sid. */
+  const concernsOfProfile = (pr: Profile) => (pr.concerns ?? []).map((i) => CONCERN_LABELS[i]).filter(Boolean);
   const profile = {
-    self: { heritage: record.self.heritage, skin: record.self.skin },
-    partner: record.partner ? { heritage: record.partner.heritage, skin: record.partner.skin } : null,
+    self: { heritage: record.self.heritage, skin: record.self.skin, concerns: concernsOfProfile(record.self) },
+    partner: record.partner
+      ? { heritage: record.partner.heritage, skin: record.partner.skin, concerns: concernsOfProfile(record.partner) }
+      : null,
   };
 
   /* Computed here rather than in the browser: after the payment redirect the

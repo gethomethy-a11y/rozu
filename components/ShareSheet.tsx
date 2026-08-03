@@ -5,7 +5,7 @@ import { IC, Raw, box } from '@/lib/icons';
 import type { Mode } from '@/lib/quiz';
 import { routineText, shortText, type ShareState } from '@/lib/routineText';
 import type { CoupleInfo } from './RozuApp';
-import { ShareCard } from './ShareCard';
+import { ShareCard, coupleCard, soloCard } from './ShareCard';
 
 export type ToastFn = (msg: string, ok?: boolean) => void;
 
@@ -77,6 +77,7 @@ export function ShareSheet({
   copyText,
   taRef,
   couple,
+  concerns,
 }: {
   open: boolean;
   onClose: () => void;
@@ -85,6 +86,7 @@ export function ShareSheet({
   copyText: (str: string, okMsg: string) => void;
   taRef: React.RefObject<HTMLTextAreaElement | null>;
   couple: CoupleInfo | null;
+  concerns: string[];
 }) {
   const mode: Mode | null = share.mode;
   const [doneIds, setDoneIds] = useState<Record<string, boolean>>({});
@@ -98,6 +100,17 @@ export function ShareSheet({
   useEffect(() => {
     if (open) setDoneIds({});
   }, [open]);
+
+  /* Couple gets the comparison card; solo and gift get the ingredient card.
+     Gift currently produces the same result screen as solo, so it gets the same
+     card — the "your skin" wording is wrong for a gift, and is part of the
+     unfixed gift-mode behaviour flagged earlier rather than something new. */
+  const cardData =
+    mode === 'couple' && couple && share.pp
+      ? coupleCard(couple.match.pct, share.h, share.ph, couple.facts.factors)
+      : share.p
+        ? soloCard(share.p, share.h, share.s, concerns)
+        : null;
 
   const full = routineText(share);
   const short = shortText(share);
@@ -250,16 +263,11 @@ export function ShareSheet({
             sharing, and most people will screenshot it rather than pick a
             channel. Couple mode only — there is no second heritage to compare
             on a solo routine. */}
-        {mode === 'couple' && couple && (
+        {cardData && (
           <>
-            <ShareCard
-              pct={couple.match.pct}
-              h1={share.h}
-              h2={share.ph}
-              factors={couple.facts.factors}
-            />
-            <div className="sheet-hint" style={{ marginTop: '-8px', marginBottom: '18px' }}>
-              Screenshot the card above to post it, or pick a way to send the full routine.
+            <ShareCard data={cardData} toast={toast} />
+            <div className="sheet-hint" style={{ marginBottom: '18px' }}>
+              Save it as an image, or pick a way to send the full routine below.
             </div>
           </>
         )}

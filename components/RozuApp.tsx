@@ -125,7 +125,8 @@ export function RozuApp() {
   const [routine, setRoutine] = useState<{
     p: Routine | null; h: string; s: string; pp: Routine | null; ph: string; ps: string;
     couple: CoupleInfo | null;
-  }>({ p: null, h: '', s: '', pp: null, ph: '', ps: '', couple: null });
+    concerns: string[];
+  }>({ p: null, h: '', s: '', pp: null, ph: '', ps: '', couple: null, concerns: [] });
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [toastState, setToastState] = useState<{ show: boolean; msg: string; ok: boolean }>({ show: false, msg: '', ok: true });
@@ -311,7 +312,10 @@ export function RozuApp() {
           self: Routine;
           partner: Routine | null;
           plan: Plan;
-          profile: { self: { heritage: string; skin: string }; partner: { heritage: string; skin: string } | null };
+          profile: {
+            self: { heritage: string; skin: string; concerns: string[] };
+            partner: { heritage: string; skin: string; concerns: string[] } | null;
+          };
           couple: CoupleInfo | null;
         };
 
@@ -327,6 +331,7 @@ export function RozuApp() {
           ph: d.profile.partner?.heritage ?? '',
           ps: d.profile.partner?.skin ?? '',
           couple: d.couple ?? null,
+          concerns: d.profile.self.concerns ?? [],
         });
         setResultPhase('full');
       } catch (e) {
@@ -551,7 +556,7 @@ export function RozuApp() {
     setSelfLife(emptyLife());
     setPartLife(emptyLife());
     setResultPhase('preview');
-    setRoutine({ p: null, h: '', s: '', pp: null, ph: '', ps: '', couple: null });
+    setRoutine({ p: null, h: '', s: '', pp: null, ph: '', ps: '', couple: null, concerns: [] });
     show('landing');
   }, [show]);
 
@@ -669,6 +674,7 @@ export function RozuApp() {
         copyText={copyText}
         taRef={taRef}
         couple={routine.couple}
+        concerns={routine.concerns}
       />
 
       <Toast show={toastState.show} msg={toastState.msg} ok={toastState.ok} />

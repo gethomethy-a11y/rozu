@@ -335,3 +335,5 @@ body{font-family:'Inter',sans-serif;background:#f7f5f6;color:#111;min-height:100
 .scard-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;}
 .scard-pair{font-size:11.5px;font-weight:700;color:var(--mu);line-height:1.4;}
 .scard-mark{font-size:10px;font-weight:800;letter-spacing:0.28em;color:var(--su);flex-shrink:0;}
+.scard-save{width:100%;margin-bottom:10px;}
+.scard-save:disabled{opacity:.6;cursor:default;transform:none;}

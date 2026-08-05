@@ -16,11 +16,11 @@ export default function Impressum() {
       <p>
         Lucia Mörner
         <br />
-        Tengstraße 4
+        663 Dansey Avenue
         <br />
-        80798 München
+        Coquitlam, BC V3K 3G2
         <br />
-        Deutschland
+        Kanada
       </p>
 
       <h2>Kontakt</h2>

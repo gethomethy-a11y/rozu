@@ -15,7 +15,7 @@ export default function Datenschutz() {
     <LegalPage title="Datenschutzerklärung" updated="August 2026">
       <h2>1. Verantwortlicher</h2>
       <p>
-        Lucia Mörner, Tengstraße 4, 80798 München, Deutschland. E-Mail:{' '}
+        Lucia Mörner, 663 Dansey Avenue, Coquitlam, BC V3K 3G2, Kanada. E-Mail:{' '}
         <a href="mailto:gethomethy@gmail.com">gethomethy@gmail.com</a>. Weitere Angaben
         im <a href="/impressum">Impressum</a>.
       </p>

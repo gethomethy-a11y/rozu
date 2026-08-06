@@ -13,13 +13,13 @@ export function LegalPage({ title, updated, children }: { title: string; updated
         RŌZU
       </Link>
       <h1 className="legal-h">{title}</h1>
-      <p className="legal-date">Stand: {updated}</p>
+      <p className="legal-date">Last updated: {updated}</p>
       {children}
       <div className="legal-nav">
-        <Link href="/impressum">Impressum</Link>
-        <Link href="/datenschutz">Datenschutz</Link>
-        <Link href="/widerruf">Widerruf &amp; Verkäufer</Link>
-        <Link href="/">Zurück zu RŌZU</Link>
+        <Link href="/legal">Legal</Link>
+        <Link href="/privacy">Privacy</Link>
+        <Link href="/terms">Seller &amp; refunds</Link>
+        <Link href="/">Back to RŌZU</Link>
       </div>
     </main>
   );

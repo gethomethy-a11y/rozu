@@ -4,7 +4,7 @@ import { LegalPage } from '@/components/LegalPage';
 export const metadata: Metadata = { title: 'Legal — RŌZU', robots: { index: false } };
 
 /* Canada has no equivalent of a German Impressum, so this page exists for a
- * different reason: Lemon Squeezy's review, the ad platforms, and anyone who
+ * different reason: Stripe's review, the ad platforms, and anyone who
  * wants to know who is behind the site. That makes "who we are and how to
  * reach us" the whole job — no statutory recitals that do not apply here. */
 export default function Legal() {
@@ -32,9 +32,10 @@ export default function Legal() {
 
       <h2>Who sells the routines</h2>
       <p>
-        Purchases are handled by Lemon Squeezy as merchant of record, which means
-        Lemon Squeezy — not RŌZU — is the seller and the party you contract with.
-        Details on <a href="/terms">Seller &amp; refunds</a>.
+        RŌZU, operated by the person named above, is the seller. Card payments are
+        processed by Stripe on our behalf; Stripe is our payment processor, not the
+        seller, so your contract is with us. Details on{' '}
+        <a href="/terms">Terms of sale</a>.
       </p>
 
       <h2>This is not medical advice</h2>

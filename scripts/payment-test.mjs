@@ -1,24 +1,28 @@
 #!/usr/bin/env node
-/* End-to-end test of the payment gate, against a mock Lemon Squeezy.
+/* End-to-end test of the payment gate, against a mock Stripe.
  *
  * Proves the two things that matter most about step 3:
  *   1. /api/generate cannot be reached without a real, current payment
  *   2. a real payment survives every way the round trip can go wrong
  *
- * Run against a server started with LEMONSQUEEZY_API_BASE pointed at this
- * script's mock. See scripts/run-payment-test.sh.
+ * Run against a server started with STRIPE_API_BASE pointed at this script's
+ * mock. See scripts/run-payment-test.sh.
  */
 import { createHmac, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 
 const APP = process.env.APP_URL ?? 'http://127.0.0.1:3000';
 const MOCK_PORT = Number(process.env.MOCK_PORT ?? 3999);
-const WEBHOOK_SECRET = process.env.LEMONSQUEEZY_WEBHOOK_SECRET;
-const VARIANT_SOLO = process.env.LEMONSQUEEZY_VARIANT_SOLO;
-const VARIANT_COUPLE = process.env.LEMONSQUEEZY_VARIANT_COUPLE;
+const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+const PRICE = {
+  solo: process.env.STRIPE_PRICE_SOLO,
+  couple: process.env.STRIPE_PRICE_COUPLE,
+  gift: process.env.STRIPE_PRICE_GIFT,
+};
+const CENTS = { solo: 900, couple: 1200, gift: 900 };
 
 if (!WEBHOOK_SECRET) {
-  console.error('LEMONSQUEEZY_WEBHOOK_SECRET must be set for this test');
+  console.error('STRIPE_WEBHOOK_SECRET must be set for this test');
   process.exit(1);
 }
 
@@ -36,9 +40,10 @@ function check(name, ok, detail = '') {
 
 /* ── Mocks ───────────────────────────────────────────────────────────────── */
 /* Two services on one port:
-     /v1/checkouts — Lemon Squeezy. Records what it was asked to create, so the
-                     test can read back the sid exactly as the real service
-                     would hand it to the customer.
+     /v1/checkout/sessions
+                   — Stripe. Records what it was asked to create, so the test
+                     can read back the sid exactly as the real service would
+                     hand it to the customer. Form-encoded, like the real one.
      /kv           — an Upstash-compatible Redis REST endpoint
      /rest/v1/...  — a PostgREST-compatible endpoint standing in for Supabase
 
@@ -140,15 +145,25 @@ const mock = createServer((req, res) => {
       return;
     }
 
-    const parsed = JSON.parse(body);
-    const attrs = parsed.data.attributes;
+    /* Stripe takes form-encoded bodies with bracketed paths. Reading them back
+       through URLSearchParams is also the assertion that lib/stripe encoded
+       them the way Stripe expects. */
+    const f = new URLSearchParams(body);
     checkouts.push({
-      custom: attrs.checkout_data.custom,
-      redirectUrl: attrs.product_options.redirect_url,
-      variantId: parsed.data.relationships.variant.data.id,
+      sid: f.get('metadata[sid]'),
+      plan: f.get('metadata[plan]'),
+      piSid: f.get('payment_intent_data[metadata][sid]'),
+      clientRef: f.get('client_reference_id'),
+      redirectUrl: f.get('success_url'),
+      cancelUrl: f.get('cancel_url'),
+      price: f.get('line_items[0][price]'),
+      quantity: f.get('line_items[0][quantity]'),
+      mode: f.get('mode'),
+      automaticTax: f.get('automatic_tax[enabled]'),
+      idempotencyKey: req.headers['idempotency-key'] ?? null,
     });
-    res.writeHead(201, { 'Content-Type': 'application/vnd.api+json' });
-    res.end(JSON.stringify({ data: { attributes: { url: 'https://mock.test/checkout/abc' } } }));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ id: 'cs_test_mock', url: 'https://mock.test/checkout/abc' }));
   });
 });
 await new Promise((r) => mock.listen(MOCK_PORT, '127.0.0.1', r));
@@ -182,31 +197,59 @@ async function startCheckout(plan, extra = {}) {
   return { res, json, checkout: checkouts[before] };
 }
 
-function signedWebhook(payload) {
+/* Stripe signs `${timestamp}.${body}`, not the body alone, and sends both in
+   one header. `secondsAgo` lets the replay-window test age a signature that is
+   otherwise perfectly valid. */
+function signedWebhook(payload, secondsAgo = 0) {
   const raw = JSON.stringify(payload);
-  return {
-    raw,
-    signature: createHmac('sha256', WEBHOOK_SECRET).update(raw, 'utf8').digest('hex'),
-  };
+  const t = Math.floor(Date.now() / 1000) - secondsAgo;
+  const v1 = createHmac('sha256', WEBHOOK_SECRET).update(`${t}.${raw}`, 'utf8').digest('hex');
+  return { raw, header: `t=${t},v1=${v1}` };
 }
 
-async function sendWebhook(payload, { badSignature = false } = {}) {
-  const { raw, signature } = signedWebhook(payload);
+async function sendWebhook(payload, { badSignature = false, secondsAgo = 0 } = {}) {
+  const { raw, header } = signedWebhook(payload, secondsAgo);
   return fetch(`${APP}/api/webhook`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Signature': badSignature ? 'deadbeef'.repeat(8) : signature },
+    headers: {
+      'Content-Type': 'application/json',
+      'Stripe-Signature': badSignature ? `t=${Math.floor(Date.now() / 1000)},v1=${'deadbeef'.repeat(8)}` : header,
+    },
     body: raw,
   });
 }
 
-const orderPayload = (eventName, sid, plan, orderId) => ({
-  meta: { event_name: eventName, custom_data: { sid, plan } },
+/* checkout.session.completed. `paymentStatus` is what an async payment method
+   that has not cleared looks like. */
+const orderPayload = (eventName, sid, plan, orderId, { paymentStatus = 'paid' } = {}) => ({
+  type: eventName,
   data: {
-    id: orderId,
-    attributes: {
-      status: eventName === 'order_refunded' ? 'refunded' : 'paid',
-      total: plan === 'couple' ? 1200 : 900,
-      first_order_item: { variant_id: Number(plan === 'couple' ? VARIANT_COUPLE : VARIANT_SOLO) },
+    object: {
+      id: 'cs_test_' + orderId,
+      object: 'checkout.session',
+      payment_intent: orderId,
+      payment_status: paymentStatus,
+      amount_subtotal: CENTS[plan],
+      /* Exclusive tax: the total is more than the price. The webhook must
+         compare against the subtotal or every sale looks overpaid. */
+      amount_total: CENTS[plan] + 171,
+      metadata: { sid, plan },
+    },
+  },
+});
+
+/* charge.refunded. A Charge, not a Session — it carries the sid only because
+   the checkout put it on payment_intent_data.metadata. */
+const refundPayload = (sid, plan, orderId) => ({
+  type: 'charge.refunded',
+  data: {
+    object: {
+      id: 'ch_test_' + orderId,
+      object: 'charge',
+      payment_intent: orderId,
+      amount: CENTS[plan],
+      refunded: true,
+      metadata: { sid, plan },
     },
   },
 });
@@ -240,13 +283,13 @@ console.log('\n=== 1. /api/generate refuses everything that is not a paid order 
 console.log('\n=== 2. Webhook only trusts a valid signature ===');
 {
   const sid = randomUUID();
-  const bad = await sendWebhook(orderPayload('order_created', sid, 'solo', '999'), { badSignature: true });
+  const bad = await sendWebhook(orderPayload('checkout.session.completed', sid, 'solo', 'pi_999'), { badSignature: true });
   check('bad signature → 401', bad.status === 401, `got ${bad.status}`);
 
   const noSig = await fetch(`${APP}/api/webhook`, { method: 'POST', body: '{}' });
   check('missing signature → 401', noSig.status === 401, `got ${noSig.status}`);
 
-  const unknown = await sendWebhook(orderPayload('order_created', randomUUID(), 'solo', '998'));
+  const unknown = await sendWebhook(orderPayload('checkout.session.completed', randomUUID(), 'solo', 'pi_998'));
   check('valid signature, unknown sid → 200 and ignored', unknown.status === 200);
 }
 
@@ -257,9 +300,16 @@ let soloSid;
   const { res, json, checkout } = await startCheckout('solo');
   check('checkout → 200 with a url', res.status === 200 && Boolean(json.url), `status ${res.status}`);
   soloSid = json.sid;
-  check('sid is passed to Lemon Squeezy as custom data', checkout?.custom?.sid === soloSid);
+  check('sid is passed to Stripe as session metadata', checkout?.sid === soloSid);
+  check('sid is also on the payment intent, so a refund can find it', checkout?.piSid === soloSid);
+  check('sid is the client_reference_id, for the dashboard', checkout?.clientRef === soloSid);
   check('return url carries the sid', checkout?.redirectUrl?.endsWith(`/?sid=${soloSid}`));
-  check('the solo variant was charged', checkout?.variantId === VARIANT_SOLO, `got ${checkout?.variantId}`);
+  check('cancel url goes back to the site, not to the sid', checkout?.cancelUrl && !checkout.cancelUrl.includes('sid='));
+  check('the solo price was charged', checkout?.price === PRICE.solo, `got ${checkout?.price}`);
+  check('one-time payment, not a subscription', checkout?.mode === 'payment', `got ${checkout?.mode}`);
+  check('quantity is 1', checkout?.quantity === '1', `got ${checkout?.quantity}`);
+  check('Stripe Tax is on', checkout?.automaticTax === 'true', `got ${checkout?.automaticTax}`);
+  check('the checkout is idempotent per sid', checkout?.idempotencyKey === `checkout:${soloSid}`);
 
   const pendingRes = await getPaid(soloSid);
   const pending = await pendingRes.json();
@@ -268,8 +318,8 @@ let soloSid;
   const beforePay = await generate(soloSid, 'anything');
   check('before payment, generate → 402', beforePay.status === 402);
 
-  const wh = await sendWebhook(orderPayload('order_created', soloSid, 'solo', '1001'));
-  check('order_created → 200', wh.status === 200);
+  const wh = await sendWebhook(orderPayload('checkout.session.completed', soloSid, 'solo', 'pi_1001'));
+  check('checkout.session.completed → 200', wh.status === 200);
 
   const paidRes = await getPaid(soloSid);
   const paid = await paidRes.json();
@@ -297,14 +347,14 @@ console.log('\n=== 4. Couple purchase, browser returns before the webhook ===');
 {
   const { json, checkout } = await startCheckout('couple');
   const sid = json.sid;
-  check('the couple variant was charged', checkout?.variantId === VARIANT_COUPLE, `got ${checkout?.variantId}`);
+  check('the couple price was charged', checkout?.price === PRICE.couple, `got ${checkout?.price}`);
 
   // The browser is back first: /api/paid must not hand out a token yet.
   const early = await (await getPaid(sid)).json();
   check('browser back first → still pending, no token', early.status === 'pending' && !early.token);
 
   // ...webhook lands a moment later, which is what the client polls for.
-  await sendWebhook(orderPayload('order_created', sid, 'couple', '1002'));
+  await sendWebhook(orderPayload('checkout.session.completed', sid, 'couple', 'pi_1002'));
   const paid = await (await getPaid(sid)).json();
   check('the next poll succeeds', paid.status === 'paid' && Boolean(paid.token));
 
@@ -331,12 +381,12 @@ console.log('\n=== 5. A refund revokes a token that is still cryptographically v
 {
   const { json } = await startCheckout('solo');
   const sid = json.sid;
-  await sendWebhook(orderPayload('order_created', sid, 'solo', '1003'));
+  await sendWebhook(orderPayload('checkout.session.completed', sid, 'solo', 'pi_1003'));
   const paid = await (await getPaid(sid)).json();
   check('token issued', Boolean(paid.token));
   check('generate works while paid', (await generate(sid, paid.token)).status === 200);
 
-  await sendWebhook(orderPayload('order_refunded', sid, 'solo', '1003'));
+  await sendWebhook(refundPayload(sid, 'solo', 'pi_1003'));
   check('after the refund, the same token → 402', (await generate(sid, paid.token)).status === 402);
   const after = await (await getPaid(sid)).json();
   check('/api/paid reports refunded and issues no token', after.status === 'refunded' && !after.token);
@@ -380,7 +430,7 @@ console.log('\n=== 7. Preview mode ===');
   const ok = await startCheckout('solo', { preview: KEY });
   check('correct preview key → 200', ok.res.status === 200, `got ${ok.res.status}`);
   check('preview returns no checkout url', !ok.json.url && ok.json.preview === true);
-  check('preview never contacts Lemon Squeezy', ok.checkout === undefined);
+  check('preview never contacts Stripe', ok.checkout === undefined);
 
   const sid = ok.json.sid;
   const paid = await (await getPaid(sid)).json();
@@ -397,6 +447,61 @@ console.log('\n=== 7. Preview mode ===');
   check('a normal order is still unpaid alongside preview', (await (await getPaid(other.json.sid)).json()).status === 'pending');
   check('preview token does not unlock another order', (await generate(other.json.sid, paid.token)).status === 402);
   check('a preview sid without a token is still 402', (await generate(sid, 'no')).status === 402);
+}
+
+/* ── 7b. What Stripe brings that Lemon Squeezy did not ───────────────────── */
+/* Three failure modes that are specific to this integration, and that all fail
+   open — the dangerous direction — if they are wrong. */
+console.log('\n=== 7b. Stripe-specific failure modes ===');
+{
+  // A signature Stripe really did produce, but hours ago. Without the
+  // tolerance check, anyone who captures one delivery can replay it forever —
+  // and for this webhook, replaying order_created re-marks a REFUNDED order
+  // paid.
+  const { json } = await startCheckout('solo');
+  const stale = await sendWebhook(
+    orderPayload('checkout.session.completed', json.sid, 'solo', 'pi_replay'),
+    { secondsAgo: 60 * 60 },
+  );
+  check('a validly signed but hours-old event → 401', stale.status === 401, `got ${stale.status}`);
+  check('and the order it named is still unpaid',
+    (await (await getPaid(json.sid)).json()).status === 'pending');
+
+  // An async payment method completes the session before the money arrives.
+  const b = await startCheckout('solo');
+  await sendWebhook(orderPayload('checkout.session.completed', b.json.sid, 'solo', 'pi_async', { paymentStatus: 'unpaid' }));
+  check('a completed but unpaid session does not unlock the routine',
+    (await (await getPaid(b.json.sid)).json()).status === 'pending');
+  await sendWebhook(orderPayload('checkout.session.async_payment_succeeded', b.json.sid, 'solo', 'pi_async'));
+  check('async_payment_succeeded then pays it',
+    (await (await getPaid(b.json.sid)).json()).status === 'paid');
+
+  // Events we do not act on must be ignored quietly rather than 500.
+  const noise = await sendWebhook({ type: 'payment_intent.created', data: { object: { id: 'pi_x' } } });
+  check('an event we do not handle → 200 and ignored', noise.status === 200, `got ${noise.status}`);
+}
+
+/* ── 7c. Gift is its own plan ────────────────────────────────────────────── */
+/* It used to be a UI mode that charged the solo price, so gift sales were
+   invisible. Same price, separate product — the whole point is that the
+   dashboard can tell them apart. */
+console.log('\n=== 7c. Gift plan ===');
+{
+  const { res, json, checkout } = await startCheckout('gift');
+  check('gift checkout → 200', res.status === 200, `got ${res.status}`);
+  check('the gift price was charged, not the solo one',
+    checkout?.price === PRICE.gift && PRICE.gift !== PRICE.solo, `got ${checkout?.price}`);
+  check('the plan on the metadata says gift', checkout?.plan === 'gift');
+
+  await sendWebhook(orderPayload('checkout.session.completed', json.sid, 'gift', 'pi_gift'));
+  const paid = await (await getPaid(json.sid)).json();
+  check('gift pays like any other plan', paid.status === 'paid' && Boolean(paid.token));
+  check('the token reports the gift plan', paid.plan === 'gift', `got ${paid.plan}`);
+
+  const genRes = await generate(json.sid, paid.token);
+  const gen = await genRes.json();
+  check('a gift produces one routine, not two', Array.isArray(gen.self?.morning) && gen.partner === null,
+    `status ${genRes.status} ${JSON.stringify(gen).slice(0, 300)}`);
 }
 
 /* ── 8. Couple compatibility score ───────────────────────────────────────── */

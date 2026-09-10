@@ -18,7 +18,7 @@ export function LegalPage({ title, updated, children }: { title: string; updated
       <div className="legal-nav">
         <Link href="/legal">Legal</Link>
         <Link href="/privacy">Privacy</Link>
-        <Link href="/terms">Seller &amp; refunds</Link>
+        <Link href="/terms">Terms of sale</Link>
         <Link href="/">Back to RŌZU</Link>
       </div>
     </main>

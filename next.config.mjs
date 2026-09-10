@@ -3,8 +3,8 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   /* The legal pages used to live at German paths, from when the operator was
-     in Munich. Anything already pointing at them — a Lemon Squeezy review, a
-     saved link — should still land somewhere rather than on a 404. */
+     in Munich. Anything already pointing at them — a saved link, a payment
+     provider's review — should still land somewhere rather than on a 404. */
   async redirects() {
     return [
       { source: '/impressum', destination: '/legal', permanent: true },

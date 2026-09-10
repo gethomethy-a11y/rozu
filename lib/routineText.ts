@@ -13,11 +13,21 @@ export type ShareState = {
   ps: string;
 };
 
-export function routineText(st: ShareState): string {
+/** What the couple actually scored. Passing this in rather than reading a
+ *  constant: the compatibility number became real when the couple score was
+ *  made honest, but this text kept quoting the prototype's 87% to everyone —
+ *  including the couples whose real score is nothing like it. */
+export type ShareCouple = { pct: number; sharedLabels: string[] } | null;
+
+export function routineText(st: ShareState, couple: ShareCouple = null): string {
   const p = st.p;
   if (!p) return '';
+  /* A gift is someone else's routine. "my routine" is wrong in the one place
+     the customer is most likely to paste it — the message to the person it was
+     built for. */
+  const gift = st.mode === 'gift';
   const L: string[] = [];
-  L.push('RŌZU — my heritage skincare routine');
+  L.push(gift ? 'RŌZU — a heritage skincare routine, built for you' : 'RŌZU — my heritage skincare routine');
   L.push('');
   L.push(st.h + ' · ' + st.s + ' skin');
   L.push(p.spf + ' · Key ingredient: ' + p.key_ingredient);
@@ -52,9 +62,13 @@ export function routineText(st: ShareState): string {
     for (let n = 0; n < (pp.evening || []).length; n++) {
       L.push('  ' + (n + 1) + '. ' + pp.evening[n].title + ' — ' + pp.evening[n].desc);
     }
-    L.push('');
-    L.push('SHARED: morning SPF · sleep before midnight · 2L water');
-    L.push('Compatibility: 87%');
+    if (couple?.sharedLabels.length) {
+      L.push('');
+      L.push('SHARED: ' + couple.sharedLabels.join(' · '));
+    }
+    if (couple) {
+      L.push('Compatibility: ' + couple.pct + '%');
+    }
   }
 
   L.push('');
@@ -62,9 +76,18 @@ export function routineText(st: ShareState): string {
   return L.join('\n');
 }
 
-export function shortText(st: ShareState): string {
+export function shortText(st: ShareState, couple: ShareCouple = null): string {
   if (st.mode === 'couple' && st.ph) {
-    return 'We got our couple skincare routine from RŌZU — ' + st.h + ' × ' + st.ph + ', 87% compatible. rozu.app';
+    const pct = couple ? couple.pct : null;
+    return (
+      'We got our couple skincare routine from RŌZU — ' +
+      st.h + ' × ' + st.ph +
+      (pct === null ? '' : ', ' + pct + '% compatible') +
+      '. rozu.app'
+    );
+  }
+  if (st.mode === 'gift') {
+    return 'I had RŌZU build you a ' + st.h + ' heritage skincare routine. rozu.app';
   }
   return 'I got my ' + st.h + ' heritage skincare routine from RŌZU. rozu.app';
 }

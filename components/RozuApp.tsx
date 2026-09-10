@@ -27,13 +27,14 @@ import { Toast } from './Toast';
 type Screen = 'landing' | 'ptScreen' | 'quiz' | 'loading' | 'result';
 /** Which of the two `#rBody` states the result screen is showing. */
 type ResultPhase = 'preview' | 'building' | 'full';
-/** Mirrors lib/paidToken's Plan. Not imported: that module pulls in node:crypto. */
-type Plan = 'solo' | 'couple';
+/** Mirrors lib/types' PlanName. Not imported from paidToken: that module pulls
+ *  in node:crypto. */
+type Plan = 'solo' | 'couple' | 'gift';
 
 const AI_MSGS = ['Analysing your heritage', 'Mapping your skin biology', 'Personalising your protocol', 'Almost ready…'];
 
 /* Surviving the payment round trip.
-   The customer leaves the site entirely for Lemon Squeezy's checkout — a full
+   The customer leaves the site entirely for Stripe Checkout — a full
    navigation, not an overlay, because in-app browsers (TikTok, LinkedIn) are
    the primary traffic and they handle a redirect far more reliably than a
    third-party overlay script.
@@ -277,8 +278,8 @@ export function RozuApp() {
   /* ── PAYMENT ─────────────────────────────────────────── */
 
   /* The prototype's "Unlock" button called the model directly and for free.
-     Now it buys first: create an order server-side, hand the customer to Lemon
-     Squeezy, and only generate once the webhook confirms the money arrived.
+     Now it buys first: create an order server-side, hand the customer to
+     Stripe, and only generate once the webhook confirms the money arrived.
      Nothing on this path can reach the model without a verified payment. */
 
   /* Held only while something is actually driving the result screen. The
@@ -383,8 +384,8 @@ export function RozuApp() {
       show('result');
 
       /* The webhook and the redirect race each other. Usually the webhook wins
-         and the first poll succeeds; if the customer is fast, or Lemon Squeezy
-         is slow, this waits it out rather than saying the payment failed.
+         and the first poll succeeds; if the customer is fast, or Stripe is
+         slow, this waits it out rather than saying the payment failed.
          A 5xx is the server being broken, not the payment being slow, so a few
          of those end the wait early instead of burning the full two minutes. */
       const deadline = Date.now() + PAID_DEADLINE_MS;
@@ -451,7 +452,10 @@ export function RozuApp() {
     if (busy.current) return;
     busy.current = true;
 
-    const plan: Plan = mode === 'couple' && bothDone ? 'couple' : 'solo';
+    /* Gift is its own plan now rather than a solo charge wearing a different
+       label, so gift sales are visible in Stripe instead of being folded into
+       solo. Same price; the difference is what the dashboard can tell you. */
+    const plan: Plan = mode === 'couple' && bothDone ? 'couple' : mode === 'gift' ? 'gift' : 'solo';
     const utm: Record<string, string> = {};
     const q = new URLSearchParams(window.location.search);
     for (const k of UTM_KEYS) {
@@ -512,7 +516,7 @@ export function RozuApp() {
 
       if (!d.url || !d.sid) throw new Error('checkout returned nothing');
 
-      /* Only on the path that actually leaves for Lemon Squeezy. The preview
+      /* Only on the path that actually leaves for Stripe. The preview
          branch above returns before this, so a review session never shows up
          as a checkout. */
       track(EV.checkoutStart, { plan, ...planValue(plan) });
@@ -700,7 +704,20 @@ export function RozuApp() {
               ps={routine.ps}
               couple={routine.couple}
               onOpenSheet={() => setSheetOpen(true)}
-              onCopy={() => copyText(routineText(share), 'Routine copied')}
+              onCopy={() =>
+                copyText(
+                  routineText(
+                    share,
+                    routine.couple
+                      ? {
+                          pct: routine.couple.match.pct,
+                          sharedLabels: routine.couple.facts.habits.map((h) => h.answer),
+                        }
+                      : null,
+                  ),
+                  'Routine copied',
+                )
+              }
             />
           )}
         </div>

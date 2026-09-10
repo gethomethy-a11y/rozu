@@ -103,18 +103,21 @@ export function ShareSheet({
   }, [open]);
 
   /* Couple gets the comparison card; solo and gift get the ingredient card.
-     Gift currently produces the same result screen as solo, so it gets the same
-     card — the "your skin" wording is wrong for a gift, and is part of the
-     unfixed gift-mode behaviour flagged earlier rather than something new. */
+     Gift is the same shape as solo — one person, one routine — but the copy
+     addresses the recipient rather than the buyer. */
   const cardData =
     mode === 'couple' && couple && share.pp
       ? coupleCard(couple.match.pct, share.h, share.ph, couple.facts.factors)
       : share.p
-        ? soloCard(share.p, share.h, share.s, concerns)
+        ? soloCard(share.p, share.h, share.s, concerns, mode === 'gift')
         : null;
 
-  const full = routineText(share);
-  const short = shortText(share);
+  /* The real score and the real shared habits, not the prototype's constants. */
+  const shareCouple = couple
+    ? { pct: couple.match.pct, sharedLabels: couple.facts.habits.map((h) => h.answer) }
+    : null;
+  const full = routineText(share, shareCouple);
+  const short = shortText(share, shareCouple);
 
   // Opens a link in a new tab; falls back to copying if the browser blocks it.
   function openExternal(url: string) {

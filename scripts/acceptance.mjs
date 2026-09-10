@@ -3,7 +3,7 @@
  * Scans the built output (.next/static, .next/server) for:
  *   1. emoji of any kind
  *   2. skin-tone hex values outside the question-3 swatches
- *   3. ANTHROPIC_API_KEY reaching a client bundle
+ *   3. a secret (Anthropic, Stripe, token-signing) reaching a client bundle
  * Decodes \uXXXX / \u{...} escapes first, because SWC escapes non-ASCII in
  * JS output — a raw byte grep would miss an emoji that ships fine.
  */
@@ -146,14 +146,23 @@ console.log('\n=== 2. Skin-tone hex values ===');
 console.log('\n=== 3. Secrets in client bundle ===');
 const SECRET_NAMES = [
   'ANTHROPIC_API_KEY',
-  'LEMONSQUEEZY_API_KEY',
-  'LEMONSQUEEZY_WEBHOOK_SECRET',
+  'STRIPE_SECRET_KEY',
+  'STRIPE_WEBHOOK_SECRET',
   'ROZU_TOKEN_SECRET',
+  'ROZU_PREVIEW_KEY',
   'KV_REST_API_TOKEN',
   'UPSTASH_REDIS_REST_TOKEN',
   'SUPABASE_SERVICE_ROLE_KEY',
 ];
-const SECRET_SHAPES = [/sk-ant-[A-Za-z0-9_-]{8,}/, /eyJ[A-Za-z0-9_-]{20,}\./];
+/* Key shapes, so a value pasted as a literal is caught even when the variable
+   name it came from is not in the list above: an Anthropic key, a JWT, and
+   Stripe's secret and webhook-signing keys. */
+const SECRET_SHAPES = [
+  /sk-ant-[A-Za-z0-9_-]{8,}/,
+  /eyJ[A-Za-z0-9_-]{20,}\./,
+  /sk_(test|live)_[A-Za-z0-9]{16,}/,
+  /whsec_[A-Za-z0-9]{16,}/,
+];
 const clientFiles = walk(join(ROOT, '.next/static'));
 let leaked = 0;
 for (const name of SECRET_NAMES) {

@@ -60,15 +60,23 @@ export default function Privacy() {
         not use API inputs to train its models.
       </p>
 
-      <h2>4. Payment (Lemon Squeezy)</h2>
+      <h2>4. Payment (Stripe)</h2>
       <p>
-        Payment is handled by Lemon Squeezy as merchant of record. You enter your card
-        details and your email address with them directly; we never see or store either.
-        Their{' '}
-        <a href="https://www.lemonsqueezy.com/privacy" rel="noopener noreferrer" target="_blank">
+        Card payments are processed by Stripe. You enter your card details on Stripe&apos;s
+        own checkout page and we never see or store them. Stripe also collects your
+        email address and your billing country — the country because we are required to
+        work out the right sales tax or VAT, and to keep a record of how we worked it
+        out. Their{' '}
+        <a href="https://stripe.com/privacy" rel="noopener noreferrer" target="_blank">
           privacy policy
         </a>{' '}
-        applies to that part. See also <a href="/terms">Seller &amp; refunds</a>.
+        applies to that part. We are the seller: see{' '}
+        <a href="/terms">Terms of sale</a>.
+      </p>
+      <p>
+        What reaches us from a payment is the order id and whether it was paid or
+        refunded. We store that against your quiz answers for 45 days so the routine you
+        paid for can be shown to you again.
       </p>
 
       <h2>5. Storage and hosting</h2>
@@ -121,7 +129,7 @@ export default function Privacy() {
       <p>
         Write to <a href="mailto:gethomethy@gmail.com">gethomethy@gmail.com</a>. Because
         we do not keep customer accounts, please include the order number from your
-        Lemon Squeezy receipt so we can find your data.
+        Stripe receipt so we can find your data.
       </p>
     </LegalPage>
   );

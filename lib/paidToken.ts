@@ -13,7 +13,13 @@
  * No JWT library, no algorithm negotiation, nothing to downgrade. */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-export type Plan = 'solo' | 'couple';
+/* The same type as lib/types' PlanName, re-exported rather than restated.
+   Two hand-written copies would drift, and the direction that drifts silently
+   is a plan this module will happily sign a token for and lib/stripe has no
+   price for. */
+export type { PlanName as Plan } from './types';
+import type { PlanName as Plan } from './types';
+import { PLAN_CENTS } from './types';
 
 export type PaidPayload = {
   /** Our session id — the key the order and its routine are stored under. */
@@ -76,7 +82,12 @@ export function verifyPaidToken(token: unknown): PaidPayload | null {
   }
 
   if (typeof payload.sid !== 'string' || !payload.sid) return null;
-  if (payload.plan !== 'solo' && payload.plan !== 'couple') return null;
+  /* Checked against the one plan table rather than a list written out here.
+     The list that used to live here said solo and couple, and adding the gift
+     plan did not reach it: the token was minted correctly and then rejected on
+     the way back, so a gift customer paid and got "payment required". A plan
+     table lookup cannot fall out of step that way. */
+  if (typeof payload.plan !== 'string' || !Object.hasOwn(PLAN_CENTS, payload.plan)) return null;
   if (typeof payload.exp !== 'number' || payload.exp < Math.floor(Date.now() / 1000)) return null;
 
   return payload;

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Boots a production build with mock Lemon Squeezy + mock Upstash credentials
+# Boots a production build with mock Stripe + mock Upstash credentials
 # and runs the payment end-to-end test against it. No real money, no real keys,
 # no network calls off the machine.
 set -euo pipefail
@@ -12,12 +12,15 @@ export MOCK_PORT
 export APP_URL="http://127.0.0.1:${APP_PORT}"
 
 # Test-only values. Real ones live in Vercel and are never in this repo.
-export LEMONSQUEEZY_API_BASE="http://127.0.0.1:${MOCK_PORT}/v1"
-export LEMONSQUEEZY_API_KEY="test-key"
-export LEMONSQUEEZY_STORE_ID="10000"
-export LEMONSQUEEZY_VARIANT_SOLO="20001"
-export LEMONSQUEEZY_VARIANT_COUPLE="20002"
-export LEMONSQUEEZY_WEBHOOK_SECRET="test-webhook-secret-$(openssl rand -hex 8)"
+export STRIPE_API_BASE="http://127.0.0.1:${MOCK_PORT}/v1"
+# sk_test_ so testMode() reports test mode, exactly as a real test key would.
+export STRIPE_SECRET_KEY="sk_test_mock"
+export STRIPE_PRICE_SOLO="price_test_solo"
+export STRIPE_PRICE_COUPLE="price_test_couple"
+# Deliberately its own id: gift is a separate product now, and a test that
+# reused the solo price could not tell the two apart.
+export STRIPE_PRICE_GIFT="price_test_gift"
+export STRIPE_WEBHOOK_SECRET="whsec_test-$(openssl rand -hex 8)"
 export ROZU_TOKEN_SECRET="test-token-secret-$(openssl rand -hex 16)"
 export ROZU_PREVIEW_KEY="test-preview-key-$(openssl rand -hex 12)"
 # Which storage driver to exercise. Both are run by `npm run test:payment`.

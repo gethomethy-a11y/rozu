@@ -33,11 +33,18 @@ export function coupleCard(
 }
 
 /** Solo and gift: no second person to compare with, so the hero is the one
- *  ingredient the whole routine is built around. */
-export function soloCard(p: Routine, heritage: string, skin: string, concerns: string[]): CardData {
+ *  ingredient the whole routine is built around. A gift card is handed to the
+ *  person it was made for, so it says "their", not "your". */
+export function soloCard(
+  p: Routine,
+  heritage: string,
+  skin: string,
+  concerns: string[],
+  gift = false,
+): CardData {
   const factors: { label: string; shared: boolean }[] = [];
   for (const c of concerns.slice(0, 2)) factors.push({ label: c, shared: true });
-  factors.push({ label: `${p.spf} — matched to your melanin`, shared: true });
+  factors.push({ label: `${p.spf} — matched to ${gift ? 'their' : 'your'} melanin`, shared: true });
   const m = p.morning?.length ?? 0;
   const e = p.evening?.length ?? 0;
   if (m || e) factors.push({ label: `${m} morning steps, ${e} evening`, shared: true });
@@ -45,7 +52,7 @@ export function soloCard(p: Routine, heritage: string, skin: string, concerns: s
 
   return {
     kind: 'solo',
-    headline: { pre: 'Your skin runs on', accent: p.key_ingredient, post: '.' },
+    headline: { pre: gift ? 'Their skin runs on' : 'Your skin runs on', accent: p.key_ingredient, post: '.' },
     factors,
     footer: `${heritage} · ${skin} skin`,
   };

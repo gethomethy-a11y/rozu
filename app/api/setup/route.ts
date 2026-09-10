@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { kvBacking, kvConfigured, kvDel, kvGet, kvSet } from '@/lib/kv';
-import { testMode } from '@/lib/lemonsqueezy';
+import { PLAN_CENTS, priceFor, taxEnabled, testMode } from '@/lib/stripe';
 import { previewEnabled, previewKeyLength, previewKeyValid } from '@/lib/preview';
 
 export const runtime = 'nodejs';
@@ -9,48 +9,55 @@ export const dynamic = 'force-dynamic';
 /* One-time setup checker.
  *
  * Reports which environment variables are present, whether storage works, and
- * what the Lemon Squeezy store and variant IDs actually are — the numbers the
- * dashboard makes hard to find. Output is plain text so it is readable on a
- * phone.
+ * what each Stripe price actually is — including the two things that are only
+ * visible once a checkout fails: whether the price is active, and whether it
+ * has a tax_behavior, which Stripe Tax requires. Output is plain text so it is
+ * readable on a phone.
  *
  * Off unless ROZU_SETUP=1 is set, and never prints a secret's value, only
  * whether it is present. Delete the ROZU_SETUP variable when finished. */
 
-const API = process.env.LEMONSQUEEZY_API_BASE ?? 'https://api.lemonsqueezy.com/v1';
-
-/* Lemon Squeezy will not sell a product whose variant is not published, and a
-   store that has not finished activation holds its variants at "pending". */
-const LIVE_STATUS = 'published';
+const API = process.env.STRIPE_API_BASE ?? 'https://api.stripe.com/v1';
 
 const REQUIRED = [
   'ANTHROPIC_API_KEY',
-  'LEMONSQUEEZY_API_KEY',
-  'LEMONSQUEEZY_WEBHOOK_SECRET',
-  'LEMONSQUEEZY_STORE_ID',
-  'LEMONSQUEEZY_VARIANT_SOLO',
-  'LEMONSQUEEZY_VARIANT_COUPLE',
+  'STRIPE_SECRET_KEY',
+  'STRIPE_WEBHOOK_SECRET',
+  'STRIPE_PRICE_SOLO',
+  'STRIPE_PRICE_COUPLE',
+  'STRIPE_PRICE_GIFT',
   'ROZU_TOKEN_SECRET',
 ] as const;
+
+const PLANS = ['solo', 'couple', 'gift'] as const;
 
 /* Names that are nearly right. A variable Vercel holds under the wrong name is
    invisible to the code and produces no error anywhere — worth calling out by
    name rather than just reporting the real one as missing. */
-const LOOKALIKE = /^(lemon|rozu|anthropic|upstash|kv_|supabase)/i;
+const LOOKALIKE = /^(stripe|lemon|rozu|anthropic|upstash|kv_|supabase)/i;
 
-function lsHeaders(key: string) {
-  return { Accept: 'application/vnd.api+json', Authorization: `Bearer ${key}` };
-}
-
-type JsonApi = {
-  data?: Array<{ id: string; attributes: Record<string, unknown> }>;
-  errors?: Array<{ detail?: string }>;
+type StripePrice = {
+  id?: string;
+  active?: boolean;
+  currency?: string;
+  unit_amount?: number | null;
+  type?: string;
+  tax_behavior?: string;
+  product?: string | { name?: string };
 };
 
-async function lsGet(path: string, key: string): Promise<JsonApi | string> {
+async function stripeGet(path: string, key: string): Promise<Record<string, unknown> | string> {
   try {
-    const res = await fetch(`${API}${path}`, { headers: lsHeaders(key), cache: 'no-store' });
-    if (!res.ok) return `HTTP ${res.status}${res.status === 401 ? ' — the API key is wrong or was revoked' : ''}`;
-    return (await res.json()) as JsonApi;
+    const res = await fetch(`${API}${path}`, {
+      headers: { Authorization: `Bearer ${key}` },
+      cache: 'no-store',
+    });
+    const json = (await res.json()) as Record<string, unknown>;
+    if (!res.ok) {
+      const err = (json.error ?? {}) as { message?: string };
+      return `HTTP ${res.status}${err.message ? ` — ${err.message}` : ''}`;
+    }
+    return json;
   } catch (e) {
     return e instanceof Error ? e.message : 'request failed';
   }
@@ -71,7 +78,10 @@ export async function GET(req: Request) {
 
   const out: string[] = [];
   const say = (s = '') => out.push(s);
-  const suggested: string[] = [];
+  /* Anything that stops a real customer paying. Collected as they are found so
+     section 4 can list them: "still missing: nothing" while three prices are
+     unusable was worse than saying nothing at all. */
+  const blockers: string[] = [];
 
   /* ?trypreview=<value> answers "would this exact value work?".
      Deliberately routed through a query parameter: that puts the candidate
@@ -152,9 +162,9 @@ export async function GET(req: Request) {
     'SUPABASE_URL',
     'SUPABASE_SERVICE_ROLE_KEY',
     'SUPABASE_ANON_KEY',
-    'LEMONSQUEEZY_API_BASE',
+    'STRIPE_API_BASE',
+    'STRIPE_TAX',
     'ROZU_PREVIEW_KEY',
-    'LEMONSQUEEZY_TEST_MODE',
     'ANTHROPIC_BASE_URL',
     'ANTHROPIC_AUTH_TOKEN',
   ]);
@@ -201,80 +211,136 @@ export async function GET(req: Request) {
     }
   }
 
-  /* ── Lemon Squeezy ─────────────────────────────────────── */
+  /* ── Stripe ────────────────────────────────────────────── */
   say();
-  say('3. YOUR LEMON SQUEEZY ACCOUNT');
+  say('3. YOUR STRIPE ACCOUNT');
   say();
-  say(
-    testMode()
-      ? '   TEST MODE IS ON — checkouts take test cards only, no real money.'
-      : '   LIVE MODE — checkouts charge real cards.',
-  );
-  say();
-  const key = process.env.LEMONSQUEEZY_API_KEY;
+  const key = process.env.STRIPE_SECRET_KEY;
   if (!key) {
-    say('   Cannot look anything up until LEMONSQUEEZY_API_KEY is set.');
+    say('   Cannot look anything up until STRIPE_SECRET_KEY is set.');
+  } else if (!/^sk_(test|live)_/.test(key)) {
+    say('   STRIPE_SECRET_KEY does not look like a secret key. It must start');
+    say('   with sk_test_ or sk_live_. A pk_ key is the publishable one and');
+    say('   cannot create a checkout; an rk_ key is a restricted key and needs');
+    say('   write access to Checkout Sessions.');
   } else {
-    const stores = await lsGet('/stores', key);
-    if (typeof stores === 'string') {
-      say(`   Could not reach Lemon Squeezy: ${stores}`);
+    say(
+      testMode()
+        ? '   TEST MODE — this is an sk_test_ key. Test cards only, no real money.'
+        : '   LIVE MODE — this is an sk_live_ key. Checkouts charge real cards.',
+    );
+    say();
+    say(
+      taxEnabled()
+        ? '   Stripe Tax is ON. It calculates tax, it does not register or remit'
+        : '   Stripe Tax is OFF (STRIPE_TAX is set to off).',
+    );
+    if (taxEnabled()) {
+      say('   it. Tax is only charged where you have added a registration under');
+      say('   Stripe -> Tax -> Registrations. With none, every sale calculates');
+      say('   zero tax and the checkout still works.');
+    }
+    say();
+
+    say();
+    const acct = await stripeGet('/account', key);
+    if (typeof acct === 'string') {
+      say(`   Could not reach Stripe: ${acct}`);
     } else {
-      for (const s of stores.data ?? []) {
-        say(`   Store "${s.attributes.name}"`);
-        say(`     LEMONSQUEEZY_STORE_ID=${s.id}`);
-        suggested.push(`LEMONSQUEEZY_STORE_ID=${s.id}`);
+      const name =
+        (acct.business_profile as { name?: string } | undefined)?.name ??
+        (acct.settings as { dashboard?: { display_name?: string } } | undefined)?.dashboard?.display_name ??
+        '(unnamed)';
+      say(`   Account "${name}"  ${acct.id ?? ''}`);
+      if (acct.charges_enabled === false) {
+        say('   NOTE: charges are not enabled on this account yet. Finish the');
+        say('         Stripe onboarding (business details + bank account)');
+        say('         before going live. Test mode still works meanwhile.');
+        if (!testMode()) blockers.push('Stripe has not enabled charges on this account yet');
       }
       say();
+    }
 
-      const variants = await lsGet('/variants', key);
-      const products = await lsGet('/products', key);
-      const productName = new Map<string, string>();
-      if (typeof products !== 'string') {
-        for (const p of products.data ?? []) productName.set(p.id, String(p.attributes.name ?? ''));
+    say('   Your prices:');
+    say();
+    for (const plan of PLANS) {
+      let id: string;
+      try {
+        id = priceFor(plan);
+      } catch {
+        say(`     ${plan.padEnd(7)} MISSING — set STRIPE_PRICE_${plan.toUpperCase()}`);
+        blockers.push(`STRIPE_PRICE_${plan.toUpperCase()} is not set`);
+        continue;
       }
 
-      if (typeof variants === 'string') {
-        say(`   Could not list variants: ${variants}`);
-      } else if (!variants.data?.length) {
-        say('   No products found. Create them first, and make sure they are');
-        say('   Published rather than Draft.');
-      } else {
-        say('   Products and their variant IDs:');
-        say();
-        for (const v of variants.data) {
-          const a = v.attributes;
-          const pid = String(a.product_id ?? '');
-          const pname = productName.get(pid) ?? `product ${pid}`;
-          const price = typeof a.price === 'number' ? ` $${(a.price / 100).toFixed(2)}` : '';
-          const status = a.status ? ` [${a.status}]` : '';
-          say(`     ${pname} / ${a.name}${price}${status}`);
-          say(`       variant id: ${v.id}`);
-          if (a.status && a.status !== LIVE_STATUS) {
-            say(`       NOTE: status is "${a.status}", not "${LIVE_STATUS}" — this`);
-            say('             cannot be bought with real money yet. Finish Store');
-            say('             activation (business details + identity');
-            say('             verification). Test mode still works meanwhile.');
-          }
-
-          const n = String(pname).toLowerCase();
-          if (n.includes('couple')) suggested.push(`LEMONSQUEEZY_VARIANT_COUPLE=${v.id}`);
-          else if (n.includes('solo')) suggested.push(`LEMONSQUEEZY_VARIANT_SOLO=${v.id}`);
+      if (!id.startsWith('price_')) {
+        say(`     ${plan.padEnd(7)} ${id}`);
+        say(`              WRONG KIND OF ID. This must be a price id (price_...).`);
+        if (id.startsWith('prod_')) {
+          say('              That is a PRODUCT id. Open the product in the Stripe');
+          say('              dashboard and copy the id from its pricing section.');
         }
+        blockers.push(`STRIPE_PRICE_${plan.toUpperCase()} is a ${id.split('_')[0]}_ id, not a price_ id`);
+        continue;
       }
+
+      const price = (await stripeGet(`/prices/${encodeURIComponent(id)}?expand[]=product`, key)) as
+        | StripePrice
+        | string;
+      if (typeof price === 'string') {
+        say(`     ${plan.padEnd(7)} ${id}`);
+        say(`              could not be read: ${price}`);
+        continue;
+      }
+
+      const product = typeof price.product === 'object' ? (price.product?.name ?? '') : '';
+      const amount =
+        typeof price.unit_amount === 'number'
+          ? ` ${(price.unit_amount / 100).toFixed(2)} ${(price.currency ?? '').toUpperCase()}`
+          : '';
+      say(`     ${plan.padEnd(7)} ${product}${amount}`);
+      say(`              ${id}`);
+
+      if (price.active === false) {
+        say('              NOTE: this price is ARCHIVED. A checkout using it fails.');
+        blockers.push(`the ${plan} price is archived`);
+      }
+      if (price.type && price.type !== 'one_time') {
+        say(`              NOTE: this is a "${price.type}" price. RŌZU sells one-time`);
+        say('                    purchases; a recurring price would subscribe them.');
+      }
+      /* The single most likely reason a live checkout 400s after this all
+         looks fine: Stripe refuses automatic_tax on a price that has not said
+         whether its amount includes tax. Invisible until the first attempt. */
+      if (taxEnabled() && (!price.tax_behavior || price.tax_behavior === 'unspecified')) {
+        say('              BLOCKER: tax_behavior is unspecified, and Stripe Tax is');
+        say('                    on. Every checkout will fail. Open the price in');
+        say('                    Stripe and set it to inclusive or exclusive.');
+        say('                    Inclusive keeps $9 as the total the customer pays.');
+        blockers.push(`the ${plan} price has no tax_behavior, and Stripe Tax is on`);
+      }
+      const cents = PLAN_CENTS[plan];
+      if (typeof price.unit_amount === 'number' && price.unit_amount !== cents) {
+        say(`              NOTE: the app expects ${cents} cents for "${plan}". The`);
+        say('                    underpaid tripwire in the webhook will fire on');
+        say('                    every sale until these agree.');
+      }
+      say();
     }
   }
 
   /* ── What to do next ───────────────────────────────────── */
   say();
-  say('4. COPY THESE INTO VERCEL');
+  say('4. WHAT IS LEFT');
   say();
-  if (suggested.length) {
-    for (const line of suggested) say(`   ${line}`);
-  } else {
-    say('   (nothing to copy yet)');
+  if (missing) say(`   ${missing} environment variable(s) missing, listed in section 1.`);
+  if (!kvConfigured()) blockers.push('no database is connected');
+  if (blockers.length) {
+    say('   These stop a real customer paying:');
+    for (const b of blockers) say(`     - ${b}`);
+  } else if (!missing) {
+    say('   Nothing. Checkout should work.');
   }
-  say();
-  say(`   Still missing: ${missing === 0 ? 'nothing' : `${missing} variable(s), listed in section 1`}`);
   say();
   say('   When everything above says OK, DELETE the ROZU_SETUP variable in');
   say('   Vercel. This page turns itself off without it.');

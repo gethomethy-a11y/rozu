@@ -203,7 +203,7 @@ export function Landing({
       <div className="foot">
         <a href="/legal">Legal</a>
         <a href="/privacy">Privacy</a>
-        <a href="/terms">Seller &amp; refunds</a>
+        <a href="/terms">Terms of sale</a>
       </div>
 </div>
   );

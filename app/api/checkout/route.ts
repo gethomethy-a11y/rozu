@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { createCheckout, lsConfigured } from '@/lib/lemonsqueezy';
+import { createCheckout, stripeConfigured } from '@/lib/stripe';
 import {
   ORDER_TTL_SECONDS,
   orderKey,
@@ -46,7 +46,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'bad request' }, { status: 400 });
   }
 
-  const plan: Plan | null = body.plan === 'couple' ? 'couple' : body.plan === 'solo' ? 'solo' : null;
+  const PLANS: readonly Plan[] = ['solo', 'couple', 'gift'];
+  const plan: Plan | null = PLANS.find((x) => x === body.plan) ?? null;
   if (!plan) return NextResponse.json({ error: 'bad request' }, { status: 400 });
 
   const self: Profile | null = parseProfile(body.self);
@@ -57,7 +58,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'bad request' }, { status: 400 });
   }
 
-  /* PREVIEW. Skips Lemon Squeezy and nothing else: the order below is written
+  /* PREVIEW. Skips Stripe and nothing else: the order below is written
      exactly as a real one, already marked paid, so the rest of the pipeline —
      token, generate-once, caching — runs untouched. Requires the key. */
   const wantsPreview = typeof body.preview === 'string' && body.preview.length > 0;
@@ -90,8 +91,8 @@ export async function POST(req: Request) {
   /* Both of these are fatal rather than degradable. An order we cannot store is
      an order we cannot honour after the redirect, and taking the money anyway
      would be the worst possible failure mode. */
-  if (!lsConfigured()) {
-    console.error('[checkout] Lemon Squeezy env vars are not set');
+  if (!stripeConfigured()) {
+    console.error('[checkout] Stripe env vars are not set');
     return NextResponse.json({ error: 'payment unavailable' }, { status: 503 });
   }
   if (!kvConfigured() && process.env.NODE_ENV === 'production') {
@@ -117,10 +118,15 @@ export async function POST(req: Request) {
   }
 
   try {
+    const site = siteUrl(req);
     const url = await createCheckout({
       plan,
       sid,
-      redirectUrl: `${siteUrl(req)}/?sid=${sid}`,
+      redirectUrl: `${site}/?sid=${sid}`,
+      /* Back to the preview, not to the landing page. The draft in
+         sessionStorage puts the quiz answers back, so an abandoned checkout
+         resumes where it left off instead of starting over. */
+      cancelUrl: site,
       email: typeof body.email === 'string' && body.email.includes('@') ? body.email : undefined,
     });
     return NextResponse.json({ url, sid });

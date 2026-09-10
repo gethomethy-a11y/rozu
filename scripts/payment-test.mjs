@@ -481,6 +481,24 @@ console.log('\n=== 7b. Stripe-specific failure modes ===');
   check('an event we do not handle → 200 and ignored', noise.status === 200, `got ${noise.status}`);
 }
 
+/* ── 7b2. The setup page reads the key correctly ─────────────────────────── */
+/* Both key kinds have to be recognised, and the mode has to be right. Saying
+   "LIVE MODE — charges real cards" over a test key is alarming; saying "TEST
+   MODE" over a live one is worse. The suite runs once per key kind. */
+console.log('\n=== 7b2. Key detection ===');
+{
+  const kind = (process.env.STRIPE_SECRET_KEY ?? '').slice(0, 2);
+  const page = await (await fetch(`${APP}/api/setup`)).text();
+  check(`a ${kind}_ key is accepted as a usable key`,
+    !page.includes('not a key Stripe will accept'), page.slice(0, 200));
+  check(`a ${kind}_test_ key reports TEST MODE`, page.includes('TEST MODE'),
+    page.split('\n').find((l) => l.includes('MODE')) ?? '(no mode line)');
+  if (kind === 'rk') {
+    check('a restricted key is told which permissions it needs',
+      page.includes('Checkout Sessions') && page.includes('WRITE'));
+  }
+}
+
 /* ── 7c. Gift is its own plan ────────────────────────────────────────────── */
 /* It used to be a UI mode that charged the solo price, so gift sales were
    invisible. Same price, separate product — the whole point is that the

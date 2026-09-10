@@ -23,9 +23,31 @@ if (process.env.STRIPE_API_BASE && process.env.NODE_ENV === 'production') {
    nothing to set and nothing to get wrong. This is strictly better than the
    LEMONSQUEEZY_TEST_MODE flag it replaces: that one defaulted to test and had
    to be explicitly turned off, which is a launch step people forget. Here,
-   using the live key IS going live. */
+   using the live key IS going live.
+
+   Both key kinds count. A restricted key is rk_test_ / rk_live_, and matching
+   only sk_ meant an rk_test_ key — a perfectly ordinary way to run test mode —
+   was reported as LIVE. Getting that backwards is the expensive direction: it
+   reads "real cards" on a screen where nothing can be charged, and it would
+   have said the same about the live key if the prefix ever changed shape. */
+const KEY_RE = /^(sk|rk)_(test|live)_/;
+
 export function testMode(): boolean {
-  return (process.env.STRIPE_SECRET_KEY ?? '').startsWith('sk_test_');
+  return /^(sk|rk)_test_/.test(process.env.STRIPE_SECRET_KEY ?? '');
+}
+
+/** Whether the key is one Stripe would accept at all, whatever its scopes. */
+export function keyLooksValid(): boolean {
+  return KEY_RE.test(process.env.STRIPE_SECRET_KEY ?? '');
+}
+
+/** 'restricted' keys carry only the scopes granted to them; 'secret' keys
+ *  carry everything. Checkout needs write access either way. */
+export function keyKind(): 'restricted' | 'secret' | 'unknown' {
+  const k = process.env.STRIPE_SECRET_KEY ?? '';
+  if (k.startsWith('rk_')) return 'restricted';
+  if (k.startsWith('sk_')) return 'secret';
+  return 'unknown';
 }
 
 /* Stripe Tax. On unless explicitly switched off.

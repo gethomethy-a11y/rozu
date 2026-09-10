@@ -13,8 +13,17 @@ export APP_URL="http://127.0.0.1:${APP_PORT}"
 
 # Test-only values. Real ones live in Vercel and are never in this repo.
 export STRIPE_API_BASE="http://127.0.0.1:${MOCK_PORT}/v1"
-# sk_test_ so testMode() reports test mode, exactly as a real test key would.
-export STRIPE_SECRET_KEY="sk_test_mock"
+# The suite runs twice. Use a different KIND of key each time so both are
+# exercised: sk_ is a full secret key, rk_ a restricted one. Matching only sk_
+# once meant an rk_test_ key was reported as LIVE MODE, which is the expensive
+# direction to be wrong in.
+if [[ "${STORAGE:-upstash}" == "supabase" ]]; then
+  export STRIPE_SECRET_KEY="rk_test_mock"
+else
+  export STRIPE_SECRET_KEY="sk_test_mock"
+fi
+# So the suite can read back what the setup page says about that key.
+export ROZU_SETUP=1
 export STRIPE_PRICE_SOLO="price_test_solo"
 export STRIPE_PRICE_COUPLE="price_test_couple"
 # Deliberately its own id: gift is a separate product now, and a test that

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { kvBacking, kvConfigured, kvDel, kvGet, kvSet } from '@/lib/kv';
-import { PLAN_CENTS, priceFor, taxEnabled, testMode } from '@/lib/stripe';
+import { PLAN_CENTS, keyKind, keyLooksValid, priceFor, taxEnabled, testMode } from '@/lib/stripe';
 import { previewEnabled, previewKeyLength, previewKeyValid } from '@/lib/preview';
 
 export const runtime = 'nodejs';
@@ -218,17 +218,28 @@ export async function GET(req: Request) {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) {
     say('   Cannot look anything up until STRIPE_SECRET_KEY is set.');
-  } else if (!/^sk_(test|live)_/.test(key)) {
-    say('   STRIPE_SECRET_KEY does not look like a secret key. It must start');
-    say('   with sk_test_ or sk_live_. A pk_ key is the publishable one and');
-    say('   cannot create a checkout; an rk_ key is a restricted key and needs');
-    say('   write access to Checkout Sessions.');
+  } else if (!keyLooksValid()) {
+    say('   STRIPE_SECRET_KEY is not a key Stripe will accept. It must start');
+    say('   with sk_test_, sk_live_, rk_test_ or rk_live_.');
+    say('   A pk_ key is the publishable one and cannot create a checkout.');
+    blockers.push('STRIPE_SECRET_KEY is not a usable Stripe key');
   } else {
+    const prefix = key.slice(0, key.indexOf('_', 3) + 1);
     say(
       testMode()
-        ? '   TEST MODE — this is an sk_test_ key. Test cards only, no real money.'
-        : '   LIVE MODE — this is an sk_live_ key. Checkouts charge real cards.',
+        ? `   TEST MODE — ${prefix} key. Test cards only, no real money.`
+        : `   LIVE MODE — ${prefix} key. Checkouts charge real cards.`,
     );
+    if (keyKind() === 'restricted') {
+      say();
+      say('   This is a RESTRICTED key, so it only has the permissions that were');
+      say('   ticked when it was made. RŌZU needs, at minimum:');
+      say('     Checkout Sessions   WRITE   (creating a checkout is a write)');
+      say('     Prices              READ    (only so this page can check them)');
+      say('   A missing permission does not show up until a customer presses');
+      say('   Unlock, so the price readout below is the test: if it comes back');
+      say('   as a permission error, the checkout will fail the same way.');
+    }
     say();
     say(
       taxEnabled()

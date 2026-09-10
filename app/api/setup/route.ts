@@ -272,6 +272,44 @@ export async function GET(req: Request) {
       say();
     }
 
+    /* A price with tax_behavior "unspecified" is only a problem when the
+       ACCOUNT has no default either. Stripe's own wording: tax_behavior is
+       "only required if a default tax behavior was not provided in the Stripe
+       Tax settings". Flagging unspecified unconditionally called a working
+       setup broken, which is the kind of false alarm that gets a checker
+       ignored the one time it is right. */
+    let acctTaxBehavior: string | null = null;
+    const taxSettings = await stripeGet('/tax/settings', key);
+    if (typeof taxSettings !== 'string') {
+      const defaults = (taxSettings.defaults ?? {}) as { tax_behavior?: string };
+      const b = defaults.tax_behavior;
+      if (b && b !== 'unspecified') acctTaxBehavior = b;
+
+      /* Where Stripe thinks the business is. It decides which country's rules
+         apply, and it is worth printing because it is set once at signup and
+         then never looked at again — a stale one quietly taxes every sale as
+         though you still lived there. */
+      const office = (taxSettings.head_office ?? null) as { address?: { country?: string } } | null;
+      const country = office?.address?.country;
+      if (country) {
+        say(`   Stripe has your business address in: ${country}`);
+        say('   Check that against the address on your /legal page. Tax is');
+        say('   worked out from this one, not from that one.');
+        say();
+      }
+      say(
+        acctTaxBehavior
+          ? `   Account default tax behavior: ${acctTaxBehavior}. Prices that do not`
+          : '   No account default tax behavior is set, so every price must set',
+      );
+      say(
+        acctTaxBehavior
+          ? '   set their own inherit this, so "unspecified" below is fine.'
+          : '   its own or the checkout is refused.',
+      );
+      say();
+    }
+
     say('   Your prices:');
     say();
     for (const plan of PLANS) {
@@ -320,15 +358,25 @@ export async function GET(req: Request) {
         say(`              NOTE: this is a "${price.type}" price. RŌZU sells one-time`);
         say('                    purchases; a recurring price would subscribe them.');
       }
-      /* The single most likely reason a live checkout 400s after this all
-         looks fine: Stripe refuses automatic_tax on a price that has not said
-         whether its amount includes tax. Invisible until the first attempt. */
-      if (taxEnabled() && (!price.tax_behavior || price.tax_behavior === 'unspecified')) {
-        say('              BLOCKER: tax_behavior is unspecified, and Stripe Tax is');
-        say('                    on. Every checkout will fail. Open the price in');
-        say('                    Stripe and set it to inclusive or exclusive.');
-        say('                    Inclusive keeps $9 as the total the customer pays.');
-        blockers.push(`the ${plan} price has no tax_behavior, and Stripe Tax is on`);
+      /* A checkout is refused only when NEITHER the price nor the account
+         says whether the amount includes tax. With an account default set,
+         this price simply inherits it. */
+      const priceBehavior = price.tax_behavior && price.tax_behavior !== 'unspecified' ? price.tax_behavior : null;
+      if (taxEnabled() && !priceBehavior) {
+        if (acctTaxBehavior) {
+          say(`              tax: inherits the account default (${acctTaxBehavior})`);
+        } else {
+          say('              BLOCKER: neither this price nor the account says whether');
+          say('                    the amount includes tax, so Stripe refuses the');
+          say('                    checkout. Fix once for everything at');
+          say('                    Stripe -> Settings -> Tax -> Include tax in prices.');
+          blockers.push(`the ${plan} price has no tax behavior, and neither does the account`);
+        }
+      } else if (taxEnabled() && priceBehavior && acctTaxBehavior && priceBehavior !== acctTaxBehavior) {
+        /* Not fatal, but it means one product is priced differently from the
+           others in a way nothing on the page explains. */
+        say(`              NOTE: this price is ${priceBehavior}, the account default is`);
+        say(`                    ${acctTaxBehavior}. This plan is taxed unlike the rest.`);
       }
       const cents = PLAN_CENTS[plan];
       if (typeof price.unit_amount === 'number' && price.unit_amount !== cents) {

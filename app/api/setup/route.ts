@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { kvBacking, kvConfigured, kvDel, kvGet, kvSet } from '@/lib/kv';
-import { PLAN_CENTS, keyKind, keyLooksValid, priceFor, taxEnabled, testMode } from '@/lib/stripe';
+import { PLAN_CENTS, createCheckout, keyKind, keyLooksValid, priceFor, taxEnabled, testMode } from '@/lib/stripe';
 import { previewEnabled, previewKeyLength, previewKeyValid } from '@/lib/preview';
 
 export const runtime = 'nodejs';
@@ -125,6 +125,63 @@ export async function GET(req: Request) {
     });
   }
 
+  /* ?trycheckout=1 answers the one question the rest of this page cannot:
+     can this key actually CREATE a checkout?
+
+     Everything else here is a read, and a key that reads prices happily can
+     still be refused at the till — which is the failure that only shows up
+     when a customer presses Unlock, having already decided to buy. So this
+     runs the real createCheckout(), the same call the same way, and prints
+     what Stripe says.
+
+     It costs nothing: an unpaid Checkout Session charges no card, and Stripe
+     expires it in 24 hours. The sid is deliberately not a UUID, so isSid()
+     in the webhook rejects it — this session can never mark an order paid,
+     which is also why its URL is truncated below rather than printed. */
+  if (new URL(req.url).searchParams.get('trycheckout') !== null) {
+    const lines = ['CHECKOUT WRITE TEST', '===================', ''];
+    const origin = new URL(req.url).origin;
+    try {
+      const url = await createCheckout({
+        plan: 'solo',
+        sid: `setup-probe-${Date.now()}`,
+        redirectUrl: origin,
+        cancelUrl: origin,
+      });
+      lines.push('   WORKS. Stripe accepted the checkout and returned a URL.');
+      lines.push('');
+      lines.push(`   ${url.slice(0, 40)}...  (${url.length} characters)`);
+      lines.push('');
+      /* Deliberately truncated. This page is reachable by anyone while
+         ROZU_SETUP is set, and a complete checkout URL is payable: a stranger
+         could load this, pay $9, and receive nothing, because the probe's sid
+         is not a UUID and the webhook drops it. Seeing that Stripe returned a
+         URL at all is the whole result. */
+      lines.push('   Truncated on purpose — a full checkout URL can be paid, and');
+      lines.push('   this page is public while ROZU_SETUP is set. That Stripe');
+      lines.push('   returned one at all is the answer. To see the real page,');
+      lines.push('   press Unlock on the site.');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      lines.push('   FAILED. A real customer pressing Unlock gets this too.');
+      lines.push('');
+      lines.push(`   ${msg}`);
+      lines.push('');
+      if (/permission/i.test(msg)) {
+        lines.push('   The key is missing Checkout Sessions WRITE. Stripe ->');
+        lines.push('   Developers -> API keys -> your key -> Edit -> set');
+        lines.push('   "Checkout Sessions" to Write, save, and try again.');
+        lines.push('   No redeploy needed: the key value has not changed.');
+      } else if (/tax_behavior/i.test(msg)) {
+        lines.push('   Set a tax behavior, either on the price or as the account');
+        lines.push('   default at Stripe -> Settings -> Tax.');
+      }
+    }
+    return new NextResponse(lines.join('\n') + '\n', {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+    });
+  }
+
   say('ROZU SETUP CHECK');
   say('================');
   say();
@@ -236,9 +293,10 @@ export async function GET(req: Request) {
       say('   ticked when it was made. RŌZU needs, at minimum:');
       say('     Checkout Sessions   WRITE   (creating a checkout is a write)');
       say('     Prices              READ    (only so this page can check them)');
-      say('   A missing permission does not show up until a customer presses');
-      say('   Unlock, so the price readout below is the test: if it comes back');
-      say('   as a permission error, the checkout will fail the same way.');
+      say('   Reading the prices below only proves READ. Creating a checkout is');
+      say('   a WRITE, and a key can do one and not the other — so the readout');
+      say('   below is NOT the test. Prove the write with:');
+      say('     /api/setup?trycheckout=1');
     }
     say();
     say(

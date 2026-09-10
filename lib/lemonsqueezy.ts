@@ -42,8 +42,10 @@ export function variantFor(plan: Plan): string {
   return v;
 }
 
-/** The prototype's prices. Used to sanity-check what was actually charged. */
-export const PLAN_CENTS: Record<Plan, number> = { solo: 900, couple: 1200 };
+/** The prototype's prices. Used to sanity-check what was actually charged.
+ *  Defined in lib/types so the browser can read the same numbers without
+ *  pulling this module — and its node:crypto import — into a client bundle. */
+export { PLAN_CENTS } from './types';
 
 type CheckoutResponse = { data?: { attributes?: { url?: string } } };
 

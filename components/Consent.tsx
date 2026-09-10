@@ -43,7 +43,7 @@ export function Consent() {
           We would like to know which posts lead to a routine, so we load the TikTok and
           LinkedIn counters. Nothing loads unless you say yes. Your quiz answers are
           separate — we need those either way to build your routine. Details in our{' '}
-          <a href="/datenschutz">privacy policy</a>.
+          <a href="/privacy">privacy policy</a>.
         </div>
         <div className="consent-btns">
           <button className="consent-btn a" onClick={() => decide(true)}>

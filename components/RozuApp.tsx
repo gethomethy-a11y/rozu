@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { EV, planValue, track } from '@/lib/analytics';
 import { profileOf } from '@/lib/order';
 import {
   QS,
@@ -145,6 +146,17 @@ export function RozuApp() {
     setScreen(id);
   }, []);
 
+  /* ── FUNNEL ──────────────────────────────────────────────
+     Every step of the funnel reports itself. Without these the ad platforms
+     see a page load and nothing else, and cannot be asked to find more people
+     who buy — which is the entire reason the pixels are here.
+
+     track() is a no-op until consent is granted, so none of these calls need
+     to think about it. */
+  useEffect(() => {
+    track(EV.landing);
+  }, []);
+
   /* The prototype swaps innerHTML and *then* calls window.scrollTo(0,0), so the
      scroll always lands against the new layout. React commits asynchronously,
      so scrolling inside the handler runs against the OLD layout — with
@@ -170,8 +182,15 @@ export function RozuApp() {
     show('quiz');
   }, [show]);
 
+  const selectWho = useCallback((m: Mode) => {
+    setMode(m);
+    track(EV.whoSelected, { mode: m });
+  }, []);
+
   const startQuiz = useCallback(() => {
-    if (mode) initQuiz();
+    if (!mode) return;
+    track(EV.quizStart, { mode });
+    initQuiz();
   }, [mode, initQuiz]);
 
   const pick = useCallback(
@@ -210,6 +229,9 @@ export function RozuApp() {
     setTimeout(() => {
       setResultPhase('preview');
       show('result');
+      /* Fired when the paywall is actually on screen, not when the quiz ended:
+         this is the number the checkout rate is measured against. */
+      track(EV.previewSeen);
     }, 1400);
   }, [show]);
 
@@ -231,10 +253,12 @@ export function RozuApp() {
       setSelfAns(JSON.parse(JSON.stringify(ans)));
       setSelfLife(JSON.parse(JSON.stringify(life)));
     }
+    track(EV.quizComplete, { mode });
     showPreview();
   }, [cQ, mode, filling, ans, life, show, showPreview]);
 
   const startPartner = useCallback(() => {
+    track(EV.partnerStart);
     setFilling('partner');
     setPartAns({});
     setPartLife(emptyLife());
@@ -334,6 +358,7 @@ export function RozuApp() {
           concerns: d.profile.self.concerns ?? [],
         });
         setResultPhase('full');
+        track(EV.routineSeen, { plan: d.plan });
       } catch (e) {
         /* The customer has paid and the routine is cached server-side, so this
            is recoverable by reloading — never a dead end. */
@@ -390,6 +415,12 @@ export function RozuApp() {
         return;
       }
 
+      /* The one event that matters. Reported here rather than in deliver(),
+         because deliver() also runs for preview orders where no money changed
+         hands — and a preview counted as revenue is worse than no number at
+         all: it is a number the ad platform will optimise towards. */
+      track(EV.purchase, { plan: result.plan, ...planValue(result.plan) });
+
       await deliver(sid, result.token);
     },
     [show, toast, fetchToken, deliver],
@@ -402,6 +433,10 @@ export function RozuApp() {
     async (sid: string) => {
       const result = await fetchToken(sid);
       if (typeof result === 'object') {
+        /* The other real-payment path: the tab was closed before the routine
+           landed. deliver() clears the stored sid, so this cannot fire twice
+           for the same order. */
+        track(EV.purchase, { plan: result.plan, ...planValue(result.plan) });
         await deliver(sid, result.token);
         return;
       }
@@ -476,6 +511,11 @@ export function RozuApp() {
       }
 
       if (!d.url || !d.sid) throw new Error('checkout returned nothing');
+
+      /* Only on the path that actually leaves for Lemon Squeezy. The preview
+         branch above returns before this, so a review session never shows up
+         as a checkout. */
+      track(EV.checkoutStart, { plan, ...planValue(plan) });
 
       // Last thing before leaving: the recovery handle for a closed tab.
       safeSet('local', SID_KEY, d.sid);
@@ -584,7 +624,7 @@ export function RozuApp() {
       <Landing
         active={screen === 'landing'}
         mode={mode}
-        onSelectWho={setMode}
+        onSelectWho={selectWho}
         onStart={startQuiz}
       />
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { EV, track } from '@/lib/analytics';
 import { useEffect, useRef, useState } from 'react';
 import { IC, Raw, box } from '@/lib/icons';
 import type { Mode } from '@/lib/quiz';
@@ -276,7 +277,13 @@ export function ShareSheet({
             <button
               key={o.id}
               className={'sheet-opt' + (doneIds[o.id] ? ' done' : '')}
-              onClick={() => o.fn(() => setDoneIds((d) => ({ ...d, [o.id]: true })))}
+              onClick={() => {
+              /* Which channel, not just that a share happened: the answer to
+                 "where does this actually spread" is the whole reason to
+                 report it. */
+              track(EV.shared, { channel: o.id });
+              o.fn(() => setDoneIds((d) => ({ ...d, [o.id]: true })));
+            }}
             >
               <Raw html={box(38, 12, o.bg, o.ic)} />
               <div className="sheet-opt-b">

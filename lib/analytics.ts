@@ -11,6 +11,8 @@
  * that uses them — so NEXT_PUBLIC_ is correct here and only here.
  */
 
+import { PLAN_CENTS, type PlanName } from './types';
+
 export const CONSENT_KEY = 'rozu_consent';
 
 export type Consent = 'granted' | 'denied';
@@ -76,7 +78,18 @@ export function loadPixels(): void {
   }
 
   if (linkedin) {
-    (window as unknown as { _linkedin_partner_id?: string })._linkedin_partner_id = linkedin;
+    /* The Insight Tag reads the ARRAY, not the bare id. Setting only
+       _linkedin_partner_id leaves the script loaded and silently tracking
+       nothing — no error anywhere, which is the worst way for a pixel to
+       fail. Both, in this order, is what LinkedIn's own snippet does. */
+    const w = window as unknown as {
+      _linkedin_partner_id?: string;
+      _linkedin_data_partner_ids?: string[];
+    };
+    w._linkedin_partner_id = linkedin;
+    w._linkedin_data_partner_ids = w._linkedin_data_partner_ids ?? [];
+    w._linkedin_data_partner_ids.push(linkedin);
+
     const s = document.createElement('script');
     s.async = true;
     s.src = 'https://snap.licdn.com/li.lms-analytics/insight.min.js';
@@ -84,14 +97,77 @@ export function loadPixels(): void {
   }
 }
 
+/* Both SDKs load async, and the first event of the funnel fires within a few
+   hundred milliseconds of consent — well before either script has arrived.
+   Firing straight at `window.ttq` would drop exactly the events at the top of
+   the funnel, which is the silent failure this whole file exists to avoid.
+   So: hold them here, and drain once the SDK is really there.
+
+   Deliberately our own buffer rather than TikTok's array-stub protocol. That
+   protocol is undocumented and version-specific; getting it subtly wrong looks
+   identical to it working. */
+type Pending = { name: EventName; props?: Record<string, unknown> };
+const pending: Pending[] = [];
+const MAX_PENDING = 40;
+let flushTimer: ReturnType<typeof setInterval> | null = null;
+
+function deliver(name: EventName, props?: Record<string, unknown>): boolean {
+  const tt = window.ttq;
+  const li = window.lintrk;
+  if (!tt && !li) return false;
+  try {
+    tt?.track(name, props);
+    li?.('track', { conversion_id: name });
+  } catch {
+    /* analytics must never break the product */
+  }
+  return true;
+}
+
+function flush(): void {
+  if (!window.ttq && !window.lintrk) return;
+  while (pending.length) {
+    const ev = pending.shift() as Pending;
+    deliver(ev.name, ev.props);
+  }
+  if (flushTimer) {
+    clearInterval(flushTimer);
+    flushTimer = null;
+  }
+}
+
+/* Bounded: a visitor who never accepts, or whose network eats the script,
+   must not leave an interval running for the life of the tab. */
+function scheduleFlush(): void {
+  if (flushTimer) return;
+  let tries = 0;
+  flushTimer = setInterval(() => {
+    if (++tries > 40) {
+      clearInterval(flushTimer as ReturnType<typeof setInterval>);
+      flushTimer = null;
+      pending.length = 0;
+      return;
+    }
+    flush();
+  }, 500);
+}
+
 /** Fires an event if — and only if — consent has been given. */
 export function track(name: EventName, props?: Record<string, unknown>): void {
   if (typeof window === 'undefined') return;
   if (readConsent() !== 'granted') return;
-  try {
-    window.ttq?.track(name, props);
-    window.lintrk?.('track', { conversion_id: name });
-  } catch {
-    /* analytics must never break the product */
-  }
+  if (deliver(name, props)) return;
+  /* Drop the oldest rather than grow without bound. Losing the top of a
+     stalled funnel beats holding a tab's worth of events forever. */
+  if (pending.length >= MAX_PENDING) pending.shift();
+  pending.push({ name, props });
+  scheduleFlush();
+}
+
+/* Purchase value, in whole currency units, from the one price table.
+ *
+ * TikTok and LinkedIn both optimise against `value`; an event without one is
+ * counted but cannot be bid on, which is most of the point of sending it. */
+export function planValue(plan: PlanName): { value: number; currency: 'USD' } {
+  return { value: PLAN_CENTS[plan] / 100, currency: 'USD' };
 }

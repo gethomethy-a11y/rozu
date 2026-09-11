@@ -522,6 +522,96 @@ console.log('\n=== 7c. Gift plan ===');
     `status ${genRes.status} ${JSON.stringify(gen).slice(0, 300)}`);
 }
 
+/* ── 7d. Etsy redemption codes ───────────────────────────────────────────── */
+/* Etsy takes the money, so nothing Stripe knows about proves this buyer paid.
+   A code does — but only if it cannot be spent twice, cannot be guessed, and
+   cannot buy a bigger plan than it was minted for. Each of those is a way to
+   give away a routine that costs real money to produce. */
+console.log('\n=== 7d. Etsy redemption codes ===');
+{
+  const ADMIN = process.env.ROZU_ADMIN_KEY;
+
+  const mint = async (plan, count) => {
+    const txt = await (
+      await fetch(`${APP}/api/setup?mint=${encodeURIComponent(ADMIN)}&plan=${plan}&count=${count}`)
+    ).text();
+    return txt.split('\n').map((l) => l.trim()).filter((l) => /^[2-9A-Z]{4}-[2-9A-Z]{4}$/.test(l));
+  };
+
+  /* Reads the order straight out of the mock store. The drivers store it
+     differently — Redis keeps a JSON string, PostgREST keeps a jsonb object —
+     so this unwraps whichever one this run is using. */
+  const readOrder = (sid) => {
+    const row = store.get(`order:${sid}`);
+    if (!row) return null;
+    const raw = 'v' in row ? row.v : row.value;
+    return typeof raw === 'string' ? JSON.parse(raw) : raw;
+  };
+
+  const wrongAdmin = await (await fetch(`${APP}/api/setup?mint=nope-nope-nope-nope&plan=solo&count=1`)).text();
+  check('minting refuses the wrong admin key', /Wrong admin key/.test(wrongAdmin));
+
+  const solo = await mint('solo', 2);
+  const couple = await mint('couple', 1);
+  check('minting returns codes', solo.length === 2 && couple.length === 1, `${solo.length}/${couple.length}`);
+  check('codes avoid the characters people misread',
+    solo.every((c) => !/[O01ILU]/.test(c)), JSON.stringify(solo));
+
+  // A code nobody minted.
+  const bogus = await startCheckout('solo', { etsyCode: 'ZZZZ-ZZZZ' });
+  check('an unminted code → 403 unknown', bogus.res.status === 403 && bogus.json.reason === 'unknown',
+    `${bogus.res.status} ${bogus.json.reason}`);
+  check('a rejected code never reaches Stripe', bogus.checkout === undefined);
+
+  // The one that matters: a Solo code must not buy the Couple routine.
+  const upgrade = await startCheckout('couple', { etsyCode: solo[0] });
+  check('a solo code cannot pay for the couple routine',
+    upgrade.res.status === 403 && upgrade.json.reason === 'wrong_plan', `${upgrade.res.status} ${upgrade.json.reason}`);
+  check('and it says which plan the code is for', upgrade.json.plan === 'solo', upgrade.json.plan);
+
+  // Redeem properly.
+  const first = await startCheckout('solo', { etsyCode: solo[0] });
+  check('a valid code → 200 and a paid order', first.res.status === 200 && first.json.etsy === true);
+  check('redemption never contacts Stripe', first.checkout === undefined);
+
+  const order = readOrder(first.json.sid);
+  check('the order records the etsy channel', order?.channel === 'etsy', JSON.stringify(order?.channel));
+  check('and is already paid', order?.status === 'paid');
+
+  const paid = await (await getPaid(first.json.sid)).json();
+  check('an etsy order issues a token like any other', paid.status === 'paid' && Boolean(paid.token));
+  const gen = await (await generate(first.json.sid, paid.token)).json();
+  check('and generates a real routine', Array.isArray(gen.self?.morning));
+
+  // THE guarantee.
+  const second = await startCheckout('solo', { etsyCode: solo[0] });
+  check('the same code cannot be spent twice',
+    second.res.status === 403 && second.json.reason === 'spent', `${second.res.status} ${second.json.reason}`);
+
+  // Case and punctuation are how a hand-typed code actually arrives.
+  const messy = await startCheckout('solo', { etsyCode: ` ${solo[1].toLowerCase().replace('-', ' ')} ` });
+  check('a code typed in lower case with the dash lost still works', messy.res.status === 200,
+    `${messy.res.status} ${JSON.stringify(messy.json)}`);
+
+  // The couple code buys the couple routine, and produces two routines.
+  const c = await startCheckout('couple', { etsyCode: couple[0] });
+  check('a couple code pays for the couple routine', c.res.status === 200 && c.json.etsy === true);
+  const cPaid = await (await getPaid(c.json.sid)).json();
+  const cGen = await (await generate(c.json.sid, cPaid.token)).json();
+  check('and returns two routines', Array.isArray(cGen.self?.morning) && Array.isArray(cGen.partner?.morning));
+
+  // Reading a code's state must not consume it.
+  const fresh = (await mint('solo', 1))[0];
+  await fetch(`${APP}/api/setup?checkcode=${fresh}`);
+  const afterCheck = await startCheckout('solo', { etsyCode: fresh });
+  check('checking a code does not spend it', afterCheck.res.status === 200, `${afterCheck.res.status}`);
+
+  // And the paywall is no weaker for anyone without a code.
+  const plain = await startCheckout('solo');
+  check('a normal order is still unpaid alongside redemptions',
+    (await (await getPaid(plain.json.sid)).json()).status === 'pending');
+}
+
 /* ── 8. Couple compatibility score ───────────────────────────────────────── */
 /* It was the literal string "87%" for every couple. The only thing that makes
    it worth showing is that it moves with the answers — and that the number in

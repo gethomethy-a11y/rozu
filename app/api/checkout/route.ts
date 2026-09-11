@@ -10,6 +10,7 @@ import {
 } from '@/lib/order';
 import { kvConfigured, kvSet } from '@/lib/kv';
 import { previewKeyValid } from '@/lib/preview';
+import { redeemCode } from '@/lib/etsyCode';
 import type { Plan } from '@/lib/paidToken';
 
 export const runtime = 'nodejs';
@@ -56,6 +57,53 @@ export async function POST(req: Request) {
   const partner: Profile | null = plan === 'couple' ? parseProfile(body.partner) : null;
   if (plan === 'couple' && !partner) {
     return NextResponse.json({ error: 'bad request' }, { status: 400 });
+  }
+
+  /* ETSY REDEMPTION. Etsy took the money, so there is no Stripe payment to
+     verify — a code minted here and spent exactly once stands in for it. The
+     order written below is identical to a paid one in every other way, so
+     everything downstream is unchanged.
+
+     The plan is the one the code was minted for, checked against what the
+     buyer actually filled in. A Solo code cannot pay for the Couple routine,
+     whatever the link said on the way in. */
+  const wantsCode = typeof body.etsyCode === 'string' && body.etsyCode.length > 0;
+  if (wantsCode) {
+    if (!kvConfigured() && process.env.NODE_ENV === 'production') {
+      console.error('[checkout] no KV configured — cannot redeem');
+      return NextResponse.json({ error: 'redemption unavailable' }, { status: 503 });
+    }
+
+    const sid = randomUUID();
+    const result = await redeemCode(body.etsyCode, sid, plan);
+    if (!result.ok) {
+      console.warn(`[checkout] code rejected: ${result.reason}`);
+      return NextResponse.json({ error: 'code rejected', reason: result.reason, plan: result.plan }, { status: 403 });
+    }
+
+    const record: OrderRecord = {
+      plan,
+      status: 'paid',
+      self,
+      partner,
+      createdAt: Date.now(),
+      /* There is no Stripe id for a sale Stripe never saw. The code is the
+         reference a support email will quote. */
+      orderId: `etsy-${sid}`,
+      channel: 'etsy',
+      etsyCode: typeof body.etsyCode === 'string' ? body.etsyCode.toUpperCase().trim() : undefined,
+      utm: parseUtm(body.utm),
+    };
+    try {
+      await kvSet(orderKey(sid), record, ORDER_TTL_SECONDS);
+    } catch (e) {
+      /* The code is already spent and the order did not save, which is the one
+         case a buyer cannot fix themselves. Loud, with the code in it. */
+      console.error(`[checkout] REDEEMED BUT NOT SAVED code=${result.plan} sid=${sid}:`, e instanceof Error ? e.message : e);
+      return NextResponse.json({ error: 'redemption unavailable' }, { status: 503 });
+    }
+    console.info(`[checkout] etsy redemption ${sid} (${plan})`);
+    return NextResponse.json({ etsy: true, sid });
   }
 
   /* PREVIEW. Skips Stripe and nothing else: the order below is written

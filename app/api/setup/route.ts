@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { kvBacking, kvConfigured, kvDel, kvGet, kvSet } from '@/lib/kv';
 import { PLAN_CENTS, createCheckout, keyKind, keyLooksValid, priceFor, taxEnabled, testMode } from '@/lib/stripe';
+import { adminKeyValid, codeStatus, mintCodes, mintingEnabled } from '@/lib/etsyCode';
 import { previewEnabled, previewKeyLength, previewKeyValid } from '@/lib/preview';
 
 export const runtime = 'nodejs';
@@ -76,6 +77,8 @@ export async function GET(req: Request) {
     return new NextResponse('Not found', { status: 404 });
   }
 
+  const params = new URL(req.url).searchParams;
+
   const out: string[] = [];
   const say = (s = '') => out.push(s);
   /* Anything that stops a real customer paying. Collected as they are found so
@@ -88,7 +91,7 @@ export async function GET(req: Request) {
      through the same URL decoding the real checkout sees, so a key broken by a
      "+" or a "#" fails here for the same reason and is visible instead of
      mysterious. Comparing lengths is usually enough to spot it. */
-  const candidate = new URL(req.url).searchParams.get('trypreview');
+  const candidate = params.get('trypreview');
   if (candidate !== null) {
     const lines = ['PREVIEW KEY TEST', '================', ''];
     if (!previewEnabled()) {
@@ -138,7 +141,7 @@ export async function GET(req: Request) {
      expires it in 24 hours. The sid is deliberately not a UUID, so isSid()
      in the webhook rejects it — this session can never mark an order paid,
      which is also why its URL is truncated below rather than printed. */
-  if (new URL(req.url).searchParams.get('trycheckout') !== null) {
+  if (params.get('trycheckout') !== null) {
     const lines = ['CHECKOUT WRITE TEST', '===================', ''];
     const origin = new URL(req.url).origin;
     try {
@@ -178,6 +181,52 @@ export async function GET(req: Request) {
       }
     }
     return new NextResponse(lines.join('\n') + '\n', {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+    });
+  }
+
+  /* ?mint=<ROZU_ADMIN_KEY>&plan=solo&count=10 — codes to hand to Etsy buyers.
+     Needs the admin key as well as ROZU_SETUP: see lib/etsyCode. */
+  const mintKey = params.get('mint');
+  if (mintKey !== null) {
+    const lines = ['MINT REDEMPTION CODES', '=====================', ''];
+    const plan = params.get('plan') === 'couple' ? 'couple' : params.get('plan') === 'solo' ? 'solo' : null;
+    const count = Math.min(Math.max(Number(params.get('count') ?? 10) || 0, 1), 100);
+
+    if (!mintingEnabled()) {
+      lines.push('   ROZU_ADMIN_KEY is not set (or is under 16 characters).');
+      lines.push('   Set it in Vercel, redeploy, then try again.');
+    } else if (!adminKeyValid(mintKey)) {
+      lines.push('   Wrong admin key. Nothing was minted.');
+    } else if (!plan) {
+      lines.push('   Add &plan=solo or &plan=couple.');
+    } else {
+      const codes = await mintCodes(plan, count, params.get('note') ?? undefined);
+      lines.push(`   ${codes.length} code(s) for the ${plan.toUpperCase()} routine.`);
+      lines.push('   Each works once. Send ONE per Etsy order.');
+      lines.push('');
+      for (const c of codes) lines.push(`     ${c}`);
+      lines.push('');
+      lines.push('   This is the only time they are shown in a list. Save them.');
+      lines.push('   Check one later with:  /api/setup?checkcode=CODE');
+    }
+    return new NextResponse(lines.join('\n') + '\n', {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+    });
+  }
+
+  /* ?checkcode=CODE — "has this one been used?", for answering a buyer who
+     says their code did not work. Reads only; spends nothing. */
+  const checkCode = params.get('checkcode');
+  if (checkCode !== null) {
+    const status = await codeStatus(checkCode);
+    const msg =
+      status === 'unknown'
+        ? 'NOT A CODE WE MINTED. Check for a typo first — O/0 and I/1 are not\n   in the alphabet, so they are always a misread.'
+        : status === 'spent'
+          ? 'ALREADY USED. If the buyer never got their routine, find the order\n   by this code in the logs before minting a replacement.'
+          : 'UNUSED. This one still works.';
+    return new NextResponse(`CODE CHECK\n==========\n\n   ${msg}\n`, {
       headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
     });
   }

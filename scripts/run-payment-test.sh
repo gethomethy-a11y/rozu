@@ -32,6 +32,8 @@ export STRIPE_PRICE_GIFT="price_test_gift"
 export STRIPE_WEBHOOK_SECRET="whsec_test-$(openssl rand -hex 8)"
 export ROZU_TOKEN_SECRET="test-token-secret-$(openssl rand -hex 16)"
 export ROZU_PREVIEW_KEY="test-preview-key-$(openssl rand -hex 12)"
+# Gates code minting, separately from ROZU_SETUP.
+export ROZU_ADMIN_KEY="test-admin-key-$(openssl rand -hex 12)"
 # Which storage driver to exercise. Both are run by `npm run test:payment`.
 STORAGE="${STORAGE:-upstash}"
 if [[ "$STORAGE" == "supabase" ]]; then

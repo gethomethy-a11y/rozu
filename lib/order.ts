@@ -56,6 +56,12 @@ export type OrderRecord = {
   /* Created through preview mode, so no money changed hands. Kept on the record
      so these never get counted as revenue when analytics land in step 4. */
   preview?: boolean;
+  /* Which channel took the money. Absent on orders written before there was
+     more than one, which are all Stripe. This is also the Etsy sales count:
+     the order records are the only place both channels meet. */
+  channel?: 'stripe' | 'etsy';
+  /** The redemption code spent on this order, for support and reconciliation. */
+  etsyCode?: string;
 };
 
 export type GeneratedRoutines = {

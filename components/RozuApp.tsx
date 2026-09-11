@@ -45,6 +45,10 @@ const SID_KEY = 'rozu_sid';
 /* Preview mode. Typed once as ?preview=... then remembered for the tab, so
    restarting the quiz does not mean re-typing the key every time. */
 const PREVIEW_KEY = 'rozu_preview';
+/* An Etsy redemption code, arriving as ?code= on the link the buyer was sent.
+   Remembered for the tab like the preview key, so starting the quiz over does
+   not mean digging the code out of the Etsy message again. */
+const ETSY_KEY = 'rozu_etsy';
 const DRAFT_TTL_MS = 60 * 60 * 1000;
 const SID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'ttclid', 'li_fat_id'];
@@ -467,6 +471,10 @@ export function RozuApp() {
     if (fromUrl) safeSet('session', PREVIEW_KEY, fromUrl);
     const preview = fromUrl ?? safeGet('session', PREVIEW_KEY) ?? '';
 
+    const codeFromUrl = q.get('code');
+    if (codeFromUrl) safeSet('session', ETSY_KEY, codeFromUrl);
+    const etsyCode = codeFromUrl ?? safeGet('session', ETSY_KEY) ?? '';
+
     /* Written before we navigate away: if the customer abandons the checkout
        and presses back, this is what puts them on the preview instead of the
        landing page with an empty quiz. */
@@ -486,24 +494,38 @@ export function RozuApp() {
           partner: plan === 'couple' ? profileOf(partAns, partLife) : null,
           utm,
           ...(preview ? { preview } : {}),
+          ...(etsyCode ? { etsyCode } : {}),
         }),
       });
 
-      // A rejected preview key is a setup mistake, not a payment failure, and
-      // saying "could not open checkout" would send you looking in the wrong place.
+      /* 403 is a rejected key or a rejected code, never a payment failure —
+         "could not open checkout" would send both the buyer and me looking in
+         the wrong place. A buyer holding a code they paid for needs to know
+         WHICH of the three things went wrong, because two of them they can fix
+         and one of them needs an email. */
       if (r.status === 403) {
         busy.current = false;
         setResultPhase('preview');
-        toast('Preview key is not valid.', false);
+        const why = (await r.json().catch(() => ({}))) as { reason?: string; plan?: string };
+        if (!etsyCode) {
+          toast('Preview key is not valid.', false);
+        } else if (why.reason === 'spent') {
+          toast('This code has already been used. Email us and we will sort it out.', false);
+        } else if (why.reason === 'wrong_plan') {
+          toast(`This code is for the ${why.plan === 'couple' ? 'Couple' : 'Solo'} routine.`, false);
+        } else {
+          toast('We do not recognise that code. Check it and try again.', false);
+        }
         return;
       }
       if (!r.ok) throw new Error(`checkout ${r.status}`);
 
-      const d = (await r.json()) as { url?: string; sid?: string; preview?: boolean };
+      const d = (await r.json()) as { url?: string; sid?: string; preview?: boolean; etsy?: boolean };
 
-      /* Preview: the order is already marked paid, so there is nowhere to send
-         the browser. Pick up the token and go straight to the routine. */
-      if (d.preview && d.sid) {
+      /* Preview, and a redeemed Etsy code: the order is already marked paid, so
+         there is nowhere to send the browser. Pick up the token and go straight
+         to the routine. */
+      if ((d.preview || d.etsy) && d.sid) {
         const result = await fetchToken(d.sid);
         busy.current = false;
         if (typeof result === 'object') await deliver(d.sid, result.token);
